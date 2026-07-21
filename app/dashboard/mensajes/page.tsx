@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import ModalEditarAsignacion from './components/ModalEditarAsignacion'
 
 const SB_URL = 'https://frjeivfpldcigklwepqt.supabase.co'
 const SB_KEY = 'sb_publishable_6A7tufjD-rTAUAPfxyziyw_3kXMumzJ'
@@ -112,6 +113,7 @@ export default function MensajesPage() {
   const [guardiaTipo, setGuardiaTipo] = useState('comun')
 
   const [enviando, setEnviando] = useState(false)
+  const [editando, setEditando] = useState<Mensaje | null>(null)
 
   const cargarMensajes = async () => {
     const token = getToken()
@@ -418,7 +420,20 @@ export default function MensajesPage() {
     const token = getToken()
     if (!token) return
 
+    const msgOriginal = mensajes.find(m => m.id === id)
+    if (!msgOriginal) return
+
+    const dataOriginal = (() => {
+      if (typeof msgOriginal.data === 'string') {
+        try { return JSON.parse(msgOriginal.data) } catch { return {} }
+      }
+      return msgOriginal.data || {}
+    })()
+
+    const viajeId: string | undefined = dataOriginal.viajeId
+
     try {
+      // Preserva el payload original (viaje/guardia) — solo agrega la marca de anulado.
       await fetch(`${SB_URL}/rest/v1/mensajes?id=eq.${id}`, {
         method: 'PATCH',
         headers: {
@@ -429,12 +444,18 @@ export default function MensajesPage() {
         },
         body: JSON.stringify({
           leido: true,
-          data: { respuesta: 'anulado', anuladoAt: new Date().toISOString(), anuladoPor: getAdminEmail() }
+          data: {
+            ...dataOriginal,
+            respuesta: 'anulado',
+            anuladoAt: new Date().toISOString(),
+            anuladoPor: getAdminEmail()
+          }
         })
       })
 
-      const msgOriginal = mensajes.find(m => m.id === id)
-      if (msgOriginal) {
+      if (viajeId) {
+        // El viaje ya fue creado en el celular — cancelarlo estructuralmente con el mismo
+        // tipo que ya procesa MensajesPollingWorker (repo.cancelarViaje()), no solo avisar.
         await fetch(`${SB_URL}/rest/v1/mensajes`, {
           method: 'POST',
           headers: {
@@ -445,11 +466,32 @@ export default function MensajesPage() {
           },
           body: JSON.stringify({
             empresa_id: 'cot',
+            de: 'admin',
+            para: msgOriginal.para,
+            tipo: 'cancelar_viaje',
+            texto: '🚫 Una asignación de viaje fue anulada por tránsito.',
+            data: { viajeId },
+            leido: false
+          })
+        })
+      } else {
+        // Todavía no fue creado (mensaje seguía sin leer) — no hay nada que cancelar en el
+        // celular, solo avisar por texto.
+        await fetch(`${SB_URL}/rest/v1/mensajes`, {
+          method: 'POST',
+          headers: {
+            apikey: SB_KEY,
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json',
+            'Prefer': 'return=minimal'
+          },
+          body: JSON.stringify({
+            empresa_id: 'cot',
+            de: 'admin',
             para: msgOriginal.para,
             tipo: 'urgente',
             texto: '🚫 Una asignación de viaje fue anulada por tránsito. Consultá con tu despachador.',
-            leido: false,
-            creado_at: new Date().toISOString()
+            leido: false
           })
         })
       }
@@ -832,6 +874,14 @@ export default function MensajesPage() {
                           🚫 Anular asignación
                         </button>
                       )}
+                      {respuesta !== 'anulado' && (
+                        <button
+                          onClick={() => setEditando(msg)}
+                          className="mt-2 ml-2 text-xs text-blue-400 border border-blue-400/30 rounded-md px-3 py-1 hover:bg-blue-500/10 transition"
+                        >
+                          ✏️ Editar
+                        </button>
+                      )}
                     </div>
                   )}
 
@@ -849,6 +899,14 @@ export default function MensajesPage() {
           )}
         </div>
       </div>
+
+      {editando && (
+        <ModalEditarAsignacion
+          mensaje={editando}
+          onClose={() => setEditando(null)}
+          onGuardado={cargarMensajes}
+        />
+      )}
     </div>
   )
 }
