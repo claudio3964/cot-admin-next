@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter, usePathname } from 'next/navigation'
 import Link from 'next/link'
+import { useSessionGuard } from './useSessionGuard'
 
 const tabs = [
   { id: 'dashboard', label: '📊 Dashboard', path: '/dashboard' },
@@ -22,14 +23,12 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const pathname = usePathname()
   const [userEmail, setUserEmail] = useState<string>('')
 
+  useSessionGuard()
+
   useEffect(() => {
-    const token = sessionStorage.getItem('admin_token')
-    if (!token) {
-      router.push('/login')
-    }
     const email = sessionStorage.getItem('admin_email')
     setUserEmail(email || '')
-  }, [router])
+  }, [])
 
   const handleLogout = () => {
     sessionStorage.clear()
