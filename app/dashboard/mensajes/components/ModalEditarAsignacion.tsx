@@ -67,6 +67,7 @@ interface TravelRaw {
   finReal?: number | string | null
   coche?: string
   tipoServicio?: string
+  kmEmpresa?: number
 }
 
 interface ModalEditarAsignacionProps {
@@ -121,6 +122,7 @@ export default function ModalEditarAsignacion({ mensaje, onClose, onGuardado }: 
   const [travelsInfo, setTravelsInfo] = useState<Record<string, { origen?: string; destino?: string; departureTime?: string }>>({})
   const [excluirId, setExcluirId] = useState<string | undefined>(undefined)
   const [inicioBase, setInicioBase] = useState<number | null>(null) // epoch del día del viaje (para recombinar con horaSalida)
+  const [kmOriginal, setKmOriginal] = useState<number>(0) // CASO B: km actual del viaje, fallback si no hay match en el catálogo
 
   // Form
   const [esGuardia, setEsGuardia] = useState(false)
@@ -250,6 +252,7 @@ export default function ModalEditarAsignacion({ mensaje, onClose, onGuardado }: 
         setHoraSalida(travelEncontrado.departureTime || '')
         setTipoServicio(travelEncontrado.tipoServicio || 'TURNO')
         setCoche(travelEncontrado.coche || '')
+        setKmOriginal(travelEncontrado.kmEmpresa ?? 0)
 
         const infoMap: Record<string, { origen?: string; destino?: string; departureTime?: string }> = {}
         travelsDeLaJornada.forEach(t => { infoMap[t.id] = { origen: t.origen, destino: t.destino, departureTime: t.departureTime } })
@@ -363,6 +366,7 @@ export default function ModalEditarAsignacion({ mensaje, onClose, onGuardado }: 
     const dataOriginal = parseData(mensaje.data)
     const viajeId: string = dataOriginal.viajeId
     const inicioProgramado = combinarFechaHora(inicioBase, horaSalida)
+    const kmMatch = buscarKm(origen, destino)
 
     setGuardando(true)
     try {
@@ -376,7 +380,8 @@ export default function ModalEditarAsignacion({ mensaje, onClose, onGuardado }: 
           p_departure_time: horaSalida,
           p_inicio_programado: inicioProgramado,
           p_coche: coche,
-          p_tipo_servicio: tipoServicio
+          p_tipo_servicio: tipoServicio,
+          p_km_empresa: kmMatch ?? kmOriginal
         })
       })
 
