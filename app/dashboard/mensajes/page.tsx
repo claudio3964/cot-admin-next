@@ -115,6 +115,11 @@ export default function MensajesPage() {
   const [enviando, setEnviando] = useState(false)
   const [editando, setEditando] = useState<Mensaje | null>(null)
 
+  // Continuidad geográfica (paso 4): destino esperado según el último viaje
+  // del chofer, cuando no coincide con el origen declarado en la asignación.
+  const [advertenciaContinuidad, setAdvertenciaContinuidad] = useState<string | null>(null)
+  const [confirmarPeseAContinuidad, setConfirmarPeseAContinuidad] = useState(false)
+
   const cargarMensajes = async () => {
     const token = getToken()
     if (!token) return
@@ -191,6 +196,14 @@ export default function MensajesPage() {
     toggleCamposAsignacion()
   }, [tipo])
 
+  // Si cambia el chofer, el tipo o el origen declarado después de mostrar la
+  // advertencia, no tiene sentido dejar el "confirmar de todas formas" armado
+  // para una comparación que ya no aplica.
+  useEffect(() => {
+    setAdvertenciaContinuidad(null)
+    setConfirmarPeseAContinuidad(false)
+  }, [tipo, para, asigOrigen])
+
   const getOrigenesUnicos = () => {
     return [...new Set(RUTAS_CATALOGO.map(r => r.origen))].sort()
   }
@@ -238,7 +251,7 @@ export default function MensajesPage() {
     return candidato.getTime()
   }
 
-  const enviarMensaje = async () => {
+  const enviarMensaje = async (forzar: boolean = false) => {
     const token = getToken()
     if (!token) {
       router.push('/login')
@@ -267,6 +280,30 @@ export default function MensajesPage() {
       const regexHora = /^([01]\d|2[0-3]):([0-5]\d)$/
       if (!regexHora.test(asigHoraSalida)) { alert('⚠️ Hora de salida inválida (HH:MM)'); return }
       if (isNaN(Number(asigCoche)) || asigCoche.trim() === '') { alert('⚠️ El número de coche debe ser numérico'); return }
+
+      // Continuidad geográfica: comparar contra el destino del último viaje del
+      // chofer (mismo criterio que ContinuidadValidator del lado Kotlin — trim +
+      // case-insensitive; sin viaje previo, nada que comparar). No bloquea: si
+      // no coincide, se corta acá una vez para mostrar la advertencia, y el
+      // propio botón vuelve a llamar con forzar=true para confirmar igual.
+      if (!forzar) {
+        try {
+          const resUltimo = await fetch(`${SB_URL}/rest/v1/rpc/obtener_ultimo_viaje_chofer`, {
+            method: 'POST',
+            headers: { apikey: SB_KEY, Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ p_legajo: para })
+          })
+          const ultimo = await resUltimo.json()
+          const destinoUltimo: string | undefined = Array.isArray(ultimo) ? ultimo[0]?.destino : undefined
+          if (destinoUltimo && destinoUltimo.trim().toLowerCase() !== asigOrigen.trim().toLowerCase()) {
+            setAdvertenciaContinuidad(destinoUltimo)
+            setConfirmarPeseAContinuidad(true)
+            return
+          }
+        } catch (err) {
+          console.warn('No se pudo verificar continuidad geográfica:', err)
+        }
+      }
 
       const hoyAdmin = new Date()
       const fechaHoy = `${hoyAdmin.getFullYear()}-${String(hoyAdmin.getMonth()+1).padStart(2,'0')}-${String(hoyAdmin.getDate()).padStart(2,'0')}`
@@ -308,7 +345,7 @@ export default function MensajesPage() {
         apikey: SB_KEY,
         Authorization: `Bearer ${token}`,
         'Content-Type': 'application/json',
-        'Prefer': 'return=minimal'
+        'Prefer': 'return=representation'
       }
 
       const body: any = {
@@ -323,11 +360,51 @@ export default function MensajesPage() {
       if (dataViaje) body.data = dataViaje
       if (dataGuardia) body.data = dataGuardia
 
-      await fetch(`${SB_URL}/rest/v1/mensajes`, {
+      const resMensaje = await fetch(`${SB_URL}/rest/v1/mensajes`, {
         method: 'POST',
         headers,
         body: JSON.stringify(body)
       })
+      const mensajeCreado = await resMensaje.json().catch(() => null)
+      const mensajeId = Array.isArray(mensajeCreado) ? mensajeCreado[0]?.id : undefined
+
+      // Continuidad confirmada pese a la advertencia (forzar=true): no hay
+      // notificación a super admin (no existe ese mecanismo hoy) — se deja
+      // registro en inconsistencias_continuidad y se avisa al chofer por
+      // mensaje. El push es best-effort/decorativo (bright-processor no
+      // matchea ningún caso en CotFirebaseMessagingService); el chofer se
+      // entera realmente por el polling de 30s, no al instante.
+      if (forzar && advertenciaContinuidad) {
+        try {
+          await fetch(`${SB_URL}/rest/v1/inconsistencias_continuidad`, {
+            method: 'POST',
+            headers: { apikey: SB_KEY, Authorization: `Bearer ${token}`, 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
+            body: JSON.stringify({
+              empresa_id: 'cot',
+              legajo: para,
+              origen_declarado: asigOrigen,
+              destino_esperado: advertenciaContinuidad,
+              mensaje_id: mensajeId != null ? String(mensajeId) : null,
+              confirmado_por: getAdminEmail()
+            })
+          })
+
+          await fetch(`${SB_URL}/rest/v1/mensajes`, {
+            method: 'POST',
+            headers: { apikey: SB_KEY, Authorization: `Bearer ${token}`, 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
+            body: JSON.stringify({
+              empresa_id: 'cot',
+              de: 'admin',
+              para,
+              tipo: 'urgente',
+              texto: `Verificá tu ubicación: se te asignó un viaje desde ${asigOrigen}, pero tu último viaje registrado llegó a ${advertenciaContinuidad}.`,
+              leido: false
+            })
+          })
+        } catch (err) {
+          console.warn('No se pudo registrar la inconsistencia de continuidad:', err)
+        }
+      }
 
       // Enviar push FCM
       try {
@@ -374,6 +451,8 @@ export default function MensajesPage() {
         setGuardiaHoraInicio('')
         setGuardiaTipo('comun')
       }
+      setAdvertenciaContinuidad(null)
+      setConfirmarPeseAContinuidad(false)
 
       cargarMensajes()
     } catch (error) {
@@ -729,12 +808,22 @@ export default function MensajesPage() {
           />
         </div>
 
+        {advertenciaContinuidad && (
+          <div className="mt-1 mb-3 text-sm text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg p-4">
+            ⚠️ El chofer no está en {asigOrigen}: su último viaje registrado llegó a{' '}
+            <span className="text-white">{advertenciaContinuidad}</span>.
+            Guardá de nuevo para confirmar igualmente.
+          </div>
+        )}
+
         <button
-          onClick={enviarMensaje}
+          onClick={() => enviarMensaje(confirmarPeseAContinuidad)}
           disabled={enviando}
-          className="bg-[#3b82f6] text-white rounded-lg px-6 py-2 font-semibold text-sm hover:opacity-85 disabled:opacity-50 transition"
+          className={`rounded-lg px-6 py-2 font-semibold text-sm transition disabled:opacity-50 ${
+            advertenciaContinuidad ? 'bg-red-500/80 text-white hover:opacity-85' : 'bg-[#3b82f6] text-white hover:opacity-85'
+          }`}
         >
-          {enviando ? 'Enviando...' : 'Enviar mensaje'}
+          {enviando ? 'Enviando...' : advertenciaContinuidad ? '⚠️ Enviar de todas formas' : 'Enviar mensaje'}
         </button>
       </div>
 
