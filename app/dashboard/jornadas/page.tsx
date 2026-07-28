@@ -109,6 +109,23 @@ export default function JornadasPage() {
     aplicarFiltros(allJornadas)
   }, [filtroChofer, filtroFecha, filtroEstado, filtroTipo])
 
+  // Deep-link desde la tab de Inconsistencias (?order_number=XXX): abre el
+  // detalle de esa jornada apenas se termina de cargar la lista.
+  useEffect(() => {
+    if (allJornadas.length === 0) return
+    const params = new URLSearchParams(window.location.search)
+    const orderNumber = params.get('order_number')
+    if (!orderNumber) return
+
+    const jornada = allJornadas.find(j => j.order_number === orderNumber)
+    if (jornada) {
+      abrirDetalle(jornada)
+    } else {
+      alert(`No se encontró la jornada ${orderNumber} entre las últimas ${allJornadas.length} cargadas.`)
+    }
+    router.replace('/dashboard/jornadas')
+  }, [allJornadas])
+
   const limpiarFiltros = () => {
     setFiltroChofer('')
     setFiltroFecha('')

@@ -10,6 +10,7 @@ const tabs = [
   { id: 'choferes', label: '🚗 Choferes', path: '/dashboard/choferes' },
   { id: 'jornadas', label: '📋 Jornadas', path: '/dashboard/jornadas' },
   { id: 'alertas', label: '🔔 Alertas', path: '/dashboard/alertas' },
+  { id: 'alertas-integridad', label: '⚠️ Inconsistencias', path: '/dashboard/alertas-integridad' },
   { id: 'rotacion', label: '🔄 Rotación', path: '/dashboard/rotacion' },
   { id: 'flota', label: '🚌 Flota', path: '/dashboard/flota' },
   { id: 'estadisticas', label: '📈 Estadísticas', path: '/dashboard/estadisticas' },

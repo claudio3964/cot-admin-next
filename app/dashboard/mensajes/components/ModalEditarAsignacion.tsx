@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { encontrarConflicto, type ViajeParaConflicto } from '@/lib/solapamiento'
+import { encontrarUltimoDestino, type ViajeParaContinuidad } from '@/lib/continuidad'
 
 const SB_URL = 'https://frjeivfpldcigklwepqt.supabase.co'
 const SB_KEY = 'sb_publishable_6A7tufjD-rTAUAPfxyziyw_3kXMumzJ'
@@ -46,6 +47,7 @@ function buscarKm(origen: string, destino: string): number | null {
 }
 
 const getToken = () => sessionStorage.getItem('admin_token')
+const getAdminEmail = () => sessionStorage.getItem('admin_email')
 
 interface Mensaje {
   id: number
@@ -112,6 +114,15 @@ function travelsAConflicto(travels: TravelRaw[]): ViajeParaConflicto[] {
   }))
 }
 
+function travelsAContinuidad(travels: TravelRaw[]): ViajeParaContinuidad[] {
+  return travels.map(t => ({
+    id: t.id,
+    destino: t.destino,
+    status: t.status || 'programado',
+    inicioProgramado: Number(t.inicioProgramado) || 0,
+  }))
+}
+
 export default function ModalEditarAsignacion({ mensaje, onClose, onGuardado }: ModalEditarAsignacionProps) {
   const [cargando, setCargando] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -136,6 +147,13 @@ export default function ModalEditarAsignacion({ mensaje, onClose, onGuardado }: 
 
   const [conflicto, setConflicto] = useState<ViajeParaConflicto | null>(null)
   const [confirmarPeseAConflicto, setConfirmarPeseAConflicto] = useState(false)
+
+  // Continuidad geográfica: todos los travels del legajo (todas las jornadas
+  // cruzando días, no solo la del viaje en edición) — mismo alcance que
+  // obtener_ultimo_viaje_chofer, para poder calcularlo localmente.
+  const [todosLosTravels, setTodosLosTravels] = useState<ViajeParaContinuidad[]>([])
+  const [advertenciaContinuidad, setAdvertenciaContinuidad] = useState<string | null>(null)
+  const [confirmarPeseAContinuidad, setConfirmarPeseAContinuidad] = useState(false)
 
   useEffect(() => {
     const cargar = async () => {
@@ -181,6 +199,9 @@ export default function ModalEditarAsignacion({ mensaje, onClose, onGuardado }: 
           const jornada = jornadas.find(j => j.data?.date === fechaViaje)
           const travels: TravelRaw[] = jornada ? (jornada.data.travels || []) : []
 
+          const todosTravelsRaw: TravelRaw[] = jornadas.flatMap(j => j.data?.travels || [])
+          setTodosLosTravels(travelsAContinuidad(todosTravelsRaw))
+
           const infoMap: Record<string, { origen?: string; destino?: string; departureTime?: string }> = {}
           travels.forEach(t => { infoMap[t.id] = { origen: t.origen, destino: t.destino, departureTime: t.departureTime } })
 
@@ -223,6 +244,10 @@ export default function ModalEditarAsignacion({ mensaje, onClose, onGuardado }: 
 
       try {
         const jornadas = await buscarJornadasDelChofer(mensaje.para, token)
+
+        const todosTravelsRaw: TravelRaw[] = jornadas.flatMap(j => j.data?.travels || [])
+        setTodosLosTravels(travelsAContinuidad(todosTravelsRaw))
+
         let travelEncontrado: TravelRaw | null = null
         let travelsDeLaJornada: TravelRaw[] = []
         for (const j of jornadas) {
@@ -283,6 +308,52 @@ export default function ModalEditarAsignacion({ mensaje, onClose, onGuardado }: 
     return encontrarConflicto(nuevaInicio, nuevaFin, travelsExistentes, excluirId)
   }
 
+  // Caso B excluye el propio viaje (ya existe en travels[]); Caso A no
+  // excluye nada porque el viaje todavía no existe.
+  const chequearContinuidad = (): string | null => {
+    const excluir = mensaje.leido ? excluirId : undefined
+    const destinoUltimo = encontrarUltimoDestino(todosLosTravels, excluir)
+    if (!destinoUltimo) return null
+    if (destinoUltimo.trim().toLowerCase() !== origen.trim().toLowerCase()) return destinoUltimo
+    return null
+  }
+
+  // Si el admin cambia el origen después de ver la advertencia de continuidad,
+  // la advertencia vieja ya no aplica a este origen nuevo — mismo criterio que
+  // el reset de mensajes/page.tsx (líneas 202-205) para el mismo caso.
+  useEffect(() => {
+    setAdvertenciaContinuidad(null)
+    setConfirmarPeseAContinuidad(false)
+  }, [origen])
+
+  // Mismo problema del lado del solapamiento: si cambia la hora de salida, o
+  // qué viaje se está editando (excluirId), el conflicto detectado antes ya
+  // no es necesariamente el mismo — no tenía este reset (gap preexistente).
+  useEffect(() => {
+    setConflicto(null)
+    setConfirmarPeseAConflicto(false)
+  }, [horaSalida, excluirId])
+
+  const registrarInconsistenciaContinuidad = async (token: string) => {
+    if (!advertenciaContinuidad) return
+    try {
+      await fetch(`${SB_URL}/rest/v1/inconsistencias_continuidad`, {
+        method: 'POST',
+        headers: { apikey: SB_KEY, Authorization: `Bearer ${token}`, 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
+        body: JSON.stringify({
+          empresa_id: 'cot',
+          legajo: mensaje.para,
+          origen_declarado: origen,
+          destino_esperado: advertenciaContinuidad,
+          mensaje_id: String(mensaje.id),
+          confirmado_por: getAdminEmail()
+        })
+      })
+    } catch (err) {
+      console.warn('No se pudo registrar la inconsistencia de continuidad:', err)
+    }
+  }
+
   const guardarGuardia = async () => {
     const token = getToken()
     if (!token) return
@@ -307,12 +378,22 @@ export default function ModalEditarAsignacion({ mensaje, onClose, onGuardado }: 
     }
   }
 
-  const guardarCasoA = async (forzar: boolean) => {
-    const detectado = chequearConflicto()
-    if (detectado && !forzar) {
-      setConflicto(detectado)
-      setConfirmarPeseAConflicto(true)
-      return
+  const guardarCasoA = async () => {
+    if (!confirmarPeseAConflicto) {
+      const detectado = chequearConflicto()
+      if (detectado) {
+        setConflicto(detectado)
+        setConfirmarPeseAConflicto(true)
+        return
+      }
+    }
+    if (!confirmarPeseAContinuidad) {
+      const destinoEsperado = chequearContinuidad()
+      if (destinoEsperado) {
+        setAdvertenciaContinuidad(destinoEsperado)
+        setConfirmarPeseAContinuidad(true)
+        return
+      }
     }
 
     const token = getToken()
@@ -344,6 +425,7 @@ export default function ModalEditarAsignacion({ mensaje, onClose, onGuardado }: 
         headers: { apikey: SB_KEY, Authorization: `Bearer ${token}`, 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
         body: JSON.stringify({ data: nuevaData })
       })
+      await registrarInconsistenciaContinuidad(token)
       onGuardado()
       onClose()
     } catch {
@@ -353,12 +435,22 @@ export default function ModalEditarAsignacion({ mensaje, onClose, onGuardado }: 
     }
   }
 
-  const guardarCasoB = async (forzar: boolean) => {
-    const detectado = chequearConflicto()
-    if (detectado && !forzar) {
-      setConflicto(detectado)
-      setConfirmarPeseAConflicto(true)
-      return
+  const guardarCasoB = async () => {
+    if (!confirmarPeseAConflicto) {
+      const detectado = chequearConflicto()
+      if (detectado) {
+        setConflicto(detectado)
+        setConfirmarPeseAConflicto(true)
+        return
+      }
+    }
+    if (!confirmarPeseAContinuidad) {
+      const destinoEsperado = chequearContinuidad()
+      if (destinoEsperado) {
+        setAdvertenciaContinuidad(destinoEsperado)
+        setConfirmarPeseAContinuidad(true)
+        return
+      }
     }
 
     const token = getToken()
@@ -405,6 +497,7 @@ export default function ModalEditarAsignacion({ mensaje, onClose, onGuardado }: 
         })
       })
 
+      await registrarInconsistenciaContinuidad(token)
       onGuardado()
       onClose()
     } catch {
@@ -416,8 +509,8 @@ export default function ModalEditarAsignacion({ mensaje, onClose, onGuardado }: 
 
   const handleGuardar = () => {
     if (esGuardia) { guardarGuardia(); return }
-    if (mensaje.leido) { guardarCasoB(confirmarPeseAConflicto); return }
-    guardarCasoA(confirmarPeseAConflicto)
+    if (mensaje.leido) { guardarCasoB(); return }
+    guardarCasoA()
   }
 
   const infoConflicto = conflicto ? travelsInfo[conflicto.id] : null
@@ -532,6 +625,14 @@ export default function ModalEditarAsignacion({ mensaje, onClose, onGuardado }: 
             </div>
           )}
 
+          {advertenciaContinuidad && (
+            <div className="mt-4 text-sm text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg p-4">
+              ⚠️ El chofer no está en {origen}: su último viaje registrado llegó a{' '}
+              <span className="text-white">{advertenciaContinuidad}</span>.
+              Guardá de nuevo para confirmar igualmente.
+            </div>
+          )}
+
           {!cargando && !error && (
             <div className="flex justify-end gap-2 mt-6">
               <button
@@ -544,10 +645,10 @@ export default function ModalEditarAsignacion({ mensaje, onClose, onGuardado }: 
                 onClick={handleGuardar}
                 disabled={guardando}
                 className={`rounded-lg px-4 py-2 text-sm font-semibold transition disabled:opacity-50 ${
-                  conflicto ? 'bg-red-500/80 text-white hover:opacity-85' : 'bg-[#3b82f6] text-white hover:opacity-85'
+                  (conflicto || advertenciaContinuidad) ? 'bg-red-500/80 text-white hover:opacity-85' : 'bg-[#3b82f6] text-white hover:opacity-85'
                 }`}
               >
-                {guardando ? 'Guardando...' : conflicto ? '⚠️ Guardar de todas formas' : 'Guardar'}
+                {guardando ? 'Guardando...' : (conflicto || advertenciaContinuidad) ? '⚠️ Guardar de todas formas' : 'Guardar'}
               </button>
             </div>
           )}
