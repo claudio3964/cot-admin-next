@@ -120,6 +120,12 @@ export default function MensajesPage() {
   const [advertenciaContinuidad, setAdvertenciaContinuidad] = useState<string | null>(null)
   const [confirmarPeseAContinuidad, setConfirmarPeseAContinuidad] = useState(false)
 
+  // Guard de "jornada colgada" (capa 1): jornada activa (data.closed !== true)
+  // con fecha anterior a hoy para el chofer destinatario. A diferencia de la
+  // continuidad geográfica, este chequeo bloquea sin opción de "enviar de
+  // todas formas" — el admin tiene que resolver la jornada vieja primero.
+  const [jornadaColgada, setJornadaColgada] = useState<{ orderNumber: string; fecha: string } | null>(null)
+
   const cargarMensajes = async () => {
     const token = getToken()
     if (!token) return
@@ -204,6 +210,12 @@ export default function MensajesPage() {
     setConfirmarPeseAContinuidad(false)
   }, [tipo, para, asigOrigen])
 
+  // Mismo criterio: si cambia el chofer o el tipo, el cartel de jornada
+  // colgada que se haya mostrado ya no corresponde necesariamente.
+  useEffect(() => {
+    setJornadaColgada(null)
+  }, [tipo, para])
+
   const getOrigenesUnicos = () => {
     return [...new Set(RUTAS_CATALOGO.map(r => r.origen))].sort()
   }
@@ -251,11 +263,52 @@ export default function MensajesPage() {
     return candidato.getTime()
   }
 
+  // Mismo criterio que ViajeRepositoy.obtenerJornadaActiva() del lado Kotlin:
+  // "activa" = data.closed !== true (no hay columna estado separada en la
+  // tabla jornadas). Acá además se exige fecha < hoy — jornada vieja que
+  // nunca se cerró. Fail-open ante error de red (mismo criterio que el
+  // chequeo de continuidad de más abajo): no bloquea el envío si Supabase
+  // no responde.
+  const verificarJornadaColgada = async (
+    legajo: string,
+    token: string
+  ): Promise<{ orderNumber: string; fecha: string } | null> => {
+    const hoyAdmin = new Date()
+    const fechaHoy = `${hoyAdmin.getFullYear()}-${String(hoyAdmin.getMonth() + 1).padStart(2, '0')}-${String(hoyAdmin.getDate()).padStart(2, '0')}`
+    try {
+      const res = await fetch(
+        `${SB_URL}/rest/v1/jornadas?legajo=eq.${legajo}&fecha=lt.${fechaHoy}&select=order_number,fecha,data&order=fecha.desc&limit=10`,
+        { headers: { apikey: SB_KEY, Authorization: `Bearer ${token}` } }
+      )
+      const rows = await res.json()
+      if (!Array.isArray(rows)) return null
+      for (const row of rows) {
+        const data = typeof row.data === 'string' ? JSON.parse(row.data) : (row.data || {})
+        if (!data.closed) {
+          return { orderNumber: row.order_number, fecha: row.fecha }
+        }
+      }
+      return null
+    } catch (err) {
+      console.warn('No se pudo verificar jornada colgada:', err)
+      return null
+    }
+  }
+
   const enviarMensaje = async (forzar: boolean = false) => {
     const token = getToken()
     if (!token) {
       router.push('/login')
       return
+    }
+
+    if ((tipo === 'asignacion' || tipo === 'guardia') && para !== 'todos') {
+      const colgada = await verificarJornadaColgada(para, token)
+      if (colgada) {
+        setJornadaColgada(colgada)
+        return
+      }
+      setJornadaColgada(null)
     }
 
     if (tipo === 'asignacion' && para === 'todos') {
@@ -641,6 +694,20 @@ export default function MensajesPage() {
           </div>
         </div>
 
+        {jornadaColgada && (
+          <div className="mb-4 text-sm text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg p-4">
+            🚫 Este chofer tiene una jornada abierta del <span className="text-white">{jornadaColgada.fecha}</span> sin cerrar — no se puede asignar hasta resolverla.{' '}
+            <a
+              href={`/dashboard/jornadas?order_number=${jornadaColgada.orderNumber}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="underline text-red-300 hover:text-white"
+            >
+              Ver jornada
+            </a>
+          </div>
+        )}
+
         {/* Campos Asignación */}
         {(tipo === 'asignacion') && (
           <div className="bg-blue-500/5 border border-blue-500/20 rounded-lg p-4 mb-4">
@@ -818,12 +885,14 @@ export default function MensajesPage() {
 
         <button
           onClick={() => enviarMensaje(confirmarPeseAContinuidad)}
-          disabled={enviando}
+          disabled={enviando || !!jornadaColgada}
           className={`rounded-lg px-6 py-2 font-semibold text-sm transition disabled:opacity-50 ${
             advertenciaContinuidad ? 'bg-red-500/80 text-white hover:opacity-85' : 'bg-[#3b82f6] text-white hover:opacity-85'
           }`}
         >
-          {enviando ? 'Enviando...' : advertenciaContinuidad ? '⚠️ Enviar de todas formas' : 'Enviar mensaje'}
+          {enviando ? 'Enviando...' :
+           jornadaColgada ? '🚫 Jornada colgada — no se puede enviar' :
+           advertenciaContinuidad ? '⚠️ Enviar de todas formas' : 'Enviar mensaje'}
         </button>
       </div>
 
