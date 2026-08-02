@@ -148,6 +148,14 @@ export default function ModalEditarAsignacion({ mensaje, onClose, onGuardado }: 
   const [conflicto, setConflicto] = useState<ViajeParaConflicto | null>(null)
   const [confirmarPeseAConflicto, setConfirmarPeseAConflicto] = useState(false)
 
+  // Guard de "jornada colgada" (capa 1, extendido acá): mismo criterio que
+  // verificarJornadaColgada en mensajes/page.tsx — jornada activa
+  // (data.closed !== true) con fecha anterior a hoy para el chofer
+  // destinatario. Bloquea sin "guardar de todas formas". Solo aplica a
+  // Caso A (mensaje no leído, guardarCasoA/guardarGuardia); Caso B
+  // (guardarCasoB, viaje ya creado) queda fuera a propósito.
+  const [jornadaColgada, setJornadaColgada] = useState<{ orderNumber: string; fecha: string } | null>(null)
+
   // Continuidad geográfica: todos los travels del legajo (todas las jornadas
   // cruzando días, no solo la del viaje en edición) — mismo alcance que
   // obtener_ultimo_viaje_chofer, para poder calcularlo localmente.
@@ -334,6 +342,32 @@ export default function ModalEditarAsignacion({ mensaje, onClose, onGuardado }: 
     setConfirmarPeseAConflicto(false)
   }, [horaSalida, excluirId])
 
+  const verificarJornadaColgada = async (
+    legajo: string,
+    token: string
+  ): Promise<{ orderNumber: string; fecha: string } | null> => {
+    const hoyAdmin = new Date()
+    const fechaHoy = `${hoyAdmin.getFullYear()}-${String(hoyAdmin.getMonth() + 1).padStart(2, '0')}-${String(hoyAdmin.getDate()).padStart(2, '0')}`
+    try {
+      const res = await fetch(
+        `${SB_URL}/rest/v1/jornadas?legajo=eq.${legajo}&fecha=lt.${fechaHoy}&select=order_number,fecha,data&order=fecha.desc&limit=10`,
+        { headers: { apikey: SB_KEY, Authorization: `Bearer ${token}` } }
+      )
+      const rows = await res.json()
+      if (!Array.isArray(rows)) return null
+      for (const row of rows) {
+        const data = typeof row.data === 'string' ? JSON.parse(row.data) : (row.data || {})
+        if (!data.closed) {
+          return { orderNumber: row.order_number, fecha: row.fecha }
+        }
+      }
+      return null
+    } catch (err) {
+      console.warn('No se pudo verificar jornada colgada:', err)
+      return null
+    }
+  }
+
   const registrarInconsistenciaContinuidad = async (token: string) => {
     if (!advertenciaContinuidad) return
     try {
@@ -357,6 +391,13 @@ export default function ModalEditarAsignacion({ mensaje, onClose, onGuardado }: 
   const guardarGuardia = async () => {
     const token = getToken()
     if (!token) return
+
+    const colgada = await verificarJornadaColgada(mensaje.para, token)
+    if (colgada) {
+      setJornadaColgada(colgada)
+      return
+    }
+
     setGuardando(true)
     try {
       const dataOriginal = parseData(mensaje.data)
@@ -379,6 +420,15 @@ export default function ModalEditarAsignacion({ mensaje, onClose, onGuardado }: 
   }
 
   const guardarCasoA = async () => {
+    const token = getToken()
+    if (!token) return
+
+    const colgada = await verificarJornadaColgada(mensaje.para, token)
+    if (colgada) {
+      setJornadaColgada(colgada)
+      return
+    }
+
     if (!confirmarPeseAConflicto) {
       const detectado = chequearConflicto()
       if (detectado) {
@@ -396,8 +446,6 @@ export default function ModalEditarAsignacion({ mensaje, onClose, onGuardado }: 
       }
     }
 
-    const token = getToken()
-    if (!token) return
     setGuardando(true)
     try {
       const dataOriginal = parseData(mensaje.data)
@@ -633,6 +681,20 @@ export default function ModalEditarAsignacion({ mensaje, onClose, onGuardado }: 
             </div>
           )}
 
+          {jornadaColgada && (
+            <div className="mt-4 text-sm text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg p-4">
+              🚫 Este chofer tiene una jornada abierta del <span className="text-white">{jornadaColgada.fecha}</span> sin cerrar — no se puede editar hasta resolverla.{' '}
+              <a
+                href={`/dashboard/jornadas?order_number=${jornadaColgada.orderNumber}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="underline text-red-300 hover:text-white"
+              >
+                Ver jornada
+              </a>
+            </div>
+          )}
+
           {!cargando && !error && (
             <div className="flex justify-end gap-2 mt-6">
               <button
@@ -643,12 +705,14 @@ export default function ModalEditarAsignacion({ mensaje, onClose, onGuardado }: 
               </button>
               <button
                 onClick={handleGuardar}
-                disabled={guardando}
+                disabled={guardando || !!jornadaColgada}
                 className={`rounded-lg px-4 py-2 text-sm font-semibold transition disabled:opacity-50 ${
                   (conflicto || advertenciaContinuidad) ? 'bg-red-500/80 text-white hover:opacity-85' : 'bg-[#3b82f6] text-white hover:opacity-85'
                 }`}
               >
-                {guardando ? 'Guardando...' : (conflicto || advertenciaContinuidad) ? '⚠️ Guardar de todas formas' : 'Guardar'}
+                {guardando ? 'Guardando...' :
+                 jornadaColgada ? '🚫 Jornada colgada — no se puede guardar' :
+                 (conflicto || advertenciaContinuidad) ? '⚠️ Guardar de todas formas' : 'Guardar'}
               </button>
             </div>
           )}
