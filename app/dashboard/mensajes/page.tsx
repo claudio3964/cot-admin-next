@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import Link from 'next/link'
 import ModalEditarAsignacion from './components/ModalEditarAsignacion'
 
 const SB_URL = 'https://frjeivfpldcigklwepqt.supabase.co'
@@ -697,14 +698,12 @@ export default function MensajesPage() {
         {jornadaColgada && (
           <div className="mb-4 text-sm text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg p-4">
             🚫 Este chofer tiene una jornada abierta del <span className="text-white">{jornadaColgada.fecha}</span> sin cerrar — no se puede asignar hasta resolverla.{' '}
-            <a
+            <Link
               href={`/dashboard/jornadas?order_number=${jornadaColgada.orderNumber}`}
-              target="_blank"
-              rel="noopener noreferrer"
               className="underline text-red-300 hover:text-white"
             >
               Ver jornada
-            </a>
+            </Link>
           </div>
         )}
 

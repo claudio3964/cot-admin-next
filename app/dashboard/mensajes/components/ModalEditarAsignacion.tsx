@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import Link from 'next/link'
 import { encontrarConflicto, type ViajeParaConflicto } from '@/lib/solapamiento'
 import { encontrarUltimoDestino, type ViajeParaContinuidad } from '@/lib/continuidad'
 
@@ -684,14 +685,12 @@ export default function ModalEditarAsignacion({ mensaje, onClose, onGuardado }: 
           {jornadaColgada && (
             <div className="mt-4 text-sm text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg p-4">
               🚫 Este chofer tiene una jornada abierta del <span className="text-white">{jornadaColgada.fecha}</span> sin cerrar — no se puede editar hasta resolverla.{' '}
-              <a
+              <Link
                 href={`/dashboard/jornadas?order_number=${jornadaColgada.orderNumber}`}
-                target="_blank"
-                rel="noopener noreferrer"
                 className="underline text-red-300 hover:text-white"
               >
                 Ver jornada
-              </a>
+              </Link>
             </div>
           )}
 
