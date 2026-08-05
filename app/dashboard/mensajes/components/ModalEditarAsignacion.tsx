@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import { encontrarConflicto, type ViajeParaConflicto } from '@/lib/solapamiento'
+import { encontrarConflicto, parsearInicioGuardiaMs, type ViajeParaConflicto } from '@/lib/solapamiento'
 import { encontrarUltimoDestino, type ViajeParaContinuidad } from '@/lib/continuidad'
 
 const SB_URL = 'https://frjeivfpldcigklwepqt.supabase.co'
@@ -71,6 +71,13 @@ interface TravelRaw {
   coche?: string
   tipoServicio?: string
   kmEmpresa?: number
+}
+
+interface GuardiaRaw {
+  id: string
+  inicio?: string
+  type?: string
+  status?: string
 }
 
 interface ModalEditarAsignacionProps {
@@ -145,6 +152,8 @@ export default function ModalEditarAsignacion({ mensaje, onClose, onGuardado }: 
   const [coche, setCoche] = useState('')
   const [horaInicioGuardia, setHoraInicioGuardia] = useState('')
   const [tipoGuardia, setTipoGuardia] = useState('comun')
+  // Caso B de guardias: id de la guardia real (jornadas.data.guards[]) que se está editando.
+  const [guardiaIdEditando, setGuardiaIdEditando] = useState<string | undefined>(undefined)
 
   const [conflicto, setConflicto] = useState<ViajeParaConflicto | null>(null)
   const [confirmarPeseAConflicto, setConfirmarPeseAConflicto] = useState(false)
@@ -173,14 +182,62 @@ export default function ModalEditarAsignacion({ mensaje, onClose, onGuardado }: 
 
       if (mensaje.tipo === 'guardia') {
         setEsGuardia(true)
-        if (mensaje.leido) {
-          setError('Esta guardia ya fue procesada por el chofer. La edición de guardias ya iniciadas no está soportada todavía.')
+
+        if (!mensaje.leido) {
+          // CASO A: todavía no procesada por el chofer — sin cambios.
+          const g = data.guardia || data
+          setHoraInicioGuardia(g.horaInicio || g.inicio || '')
+          setTipoGuardia(g.tipo || 'comun')
           setCargando(false)
           return
         }
-        const g = data.guardia || data
-        setHoraInicioGuardia(g.horaInicio || g.inicio || '')
-        setTipoGuardia(g.tipo || 'comun')
+
+        // CASO B: mensaje ya leído — la guardia real vive en jornadas.data.guards[]
+        const guardiaId: string | undefined = data.guardiaId
+        if (!guardiaId) {
+          setError('No se puede editar: guardia sin vincular. Contactá con soporte.')
+          setCargando(false)
+          return
+        }
+
+        try {
+          const jornadas = await buscarJornadasDelChofer(mensaje.para, token)
+
+          let guardiaEncontrada: GuardiaRaw | null = null
+          let travelsDeLaJornada: TravelRaw[] = []
+          for (const j of jornadas) {
+            const guards: GuardiaRaw[] = j.data?.guards || []
+            const found = guards.find(g => g.id === guardiaId)
+            if (found) {
+              guardiaEncontrada = found
+              travelsDeLaJornada = j.data?.travels || []
+              break
+            }
+          }
+
+          if (!guardiaEncontrada) {
+            setError('No se encontró la guardia en la jornada del chofer.')
+            setCargando(false)
+            return
+          }
+
+          if (guardiaEncontrada.status !== 'en_curso') {
+            setError(`Solo se pueden editar guardias en curso; esta ya está ${guardiaEncontrada.status}.`)
+            setCargando(false)
+            return
+          }
+
+          setHoraInicioGuardia(guardiaEncontrada.inicio || '')
+          setTipoGuardia(guardiaEncontrada.type || 'comun')
+          setGuardiaIdEditando(guardiaId)
+
+          const infoMap: Record<string, { origen?: string; destino?: string; departureTime?: string }> = {}
+          travelsDeLaJornada.forEach(t => { infoMap[t.id] = { origen: t.origen, destino: t.destino, departureTime: t.departureTime } })
+          setTravelsExistentes(travelsAConflicto(travelsDeLaJornada))
+          setTravelsInfo(infoMap)
+        } catch {
+          setError('No se pudo cargar la jornada del chofer — reintentá en un momento.')
+        }
         setCargando(false)
         return
       }
@@ -341,7 +398,18 @@ export default function ModalEditarAsignacion({ mensaje, onClose, onGuardado }: 
   useEffect(() => {
     setConflicto(null)
     setConfirmarPeseAConflicto(false)
-  }, [horaSalida, excluirId])
+  }, [horaSalida, excluirId, horaInicioGuardia])
+
+  // Equivalente de chequearConflicto() para Caso B de guardias: misma ventana de 3h que usa
+  // encontrarConflictoGuardia en Kotlin (que es un alias 1:1 de encontrarConflicto), pero
+  // interpretando horaInicioGuardia con la semántica de cruce de medianoche de una guardia
+  // (parsearInicioGuardiaMs) en vez de combinarFechaHora (que es específico de viajes).
+  const chequearConflictoGuardia = (): ViajeParaConflicto | null => {
+    const nuevaInicio = parsearInicioGuardiaMs(horaInicioGuardia)
+    if (nuevaInicio === null) return null
+    const nuevaFin = nuevaInicio + 3 * 60 * 60 * 1000
+    return encontrarConflicto(nuevaInicio, nuevaFin, travelsExistentes)
+  }
 
   const verificarJornadaColgada = async (
     legajo: string,
@@ -411,6 +479,70 @@ export default function ModalEditarAsignacion({ mensaje, onClose, onGuardado }: 
         headers: { apikey: SB_KEY, Authorization: `Bearer ${token}`, 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
         body: JSON.stringify({ data: nuevaData })
       })
+      onGuardado()
+      onClose()
+    } catch {
+      alert('❌ Error al guardar la edición')
+    } finally {
+      setGuardando(false)
+    }
+  }
+
+  const guardarGuardiaCasoB = async () => {
+    const token = getToken()
+    if (!token || !guardiaIdEditando) return
+
+    const colgada = await verificarJornadaColgada(mensaje.para, token)
+    if (colgada) {
+      setJornadaColgada(colgada)
+      return
+    }
+
+    if (!confirmarPeseAConflicto) {
+      const detectado = chequearConflictoGuardia()
+      if (detectado) {
+        setConflicto(detectado)
+        setConfirmarPeseAConflicto(true)
+        return
+      }
+    }
+
+    setGuardando(true)
+    try {
+      const res = await fetch(`${SB_URL}/rest/v1/rpc/editar_guardia_en_jornada`, {
+        method: 'POST',
+        headers: { apikey: SB_KEY, Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          p_guardia_id: guardiaIdEditando,
+          p_inicio: horaInicioGuardia
+        })
+      })
+
+      if (!res.ok) {
+        alert('❌ Error al editar la guardia en la jornada')
+        setGuardando(false)
+        return
+      }
+
+      // Avisar al chofer para que reconcilie Room/WorkManager — las guardias no tienen
+      // ningún otro mecanismo de sync desde Supabase (a diferencia de los viajes, que sí
+      // tienen sync_jornada). MensajesPollingWorker aplica inicio directo y, si tipo
+      // cambió, delega en cambiarTipoGuardia() (cierra la guardia vieja y abre una nueva —
+      // por eso el "tipo" nunca se escribe acá arriba en el jsonb, solo viaja en el mensaje).
+      await fetch(`${SB_URL}/rest/v1/mensajes`, {
+        method: 'POST',
+        headers: { apikey: SB_KEY, Authorization: `Bearer ${token}`, 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
+        body: JSON.stringify({
+          empresa_id: 'cot',
+          de: 'admin',
+          para: mensaje.para,
+          tipo: 'editar_guardia',
+          texto: 'Tu guardia fue modificada por tránsito.',
+          leido: false,
+          data: { guardiaId: guardiaIdEditando, inicio: horaInicioGuardia, tipo: tipoGuardia }
+        })
+      })
+
       onGuardado()
       onClose()
     } catch {
@@ -557,7 +689,11 @@ export default function ModalEditarAsignacion({ mensaje, onClose, onGuardado }: 
   }
 
   const handleGuardar = () => {
-    if (esGuardia) { guardarGuardia(); return }
+    if (esGuardia) {
+      if (mensaje.leido) { guardarGuardiaCasoB(); return }
+      guardarGuardia()
+      return
+    }
     if (mensaje.leido) { guardarCasoB(); return }
     guardarCasoA()
   }
