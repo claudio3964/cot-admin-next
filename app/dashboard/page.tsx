@@ -33,11 +33,18 @@ export default function DashboardPage() {
         ])
 
         const choferes = await choferesRes.json()
-        const jornadas = await jornadasRes.json()
+        const jornadasRaw = await jornadasRes.json()
         const alertas = await alertasRes.json()
 
+        const jornadas = (jornadasRaw || []).filter((j: any) => {
+          try {
+            const data = typeof j.data === 'string' ? JSON.parse(j.data) : j.data
+            return !data?.deleted
+          } catch { return true }
+        })
+
         const hoy = new Date().toISOString().split('T')[0]
-        const jornadasHoy = (jornadas || []).filter((j: any) => {
+        const jornadasHoy = jornadas.filter((j: any) => {
           try {
             const data = typeof j.data === 'string' ? JSON.parse(j.data) : j.data
             return data?.date === hoy
@@ -48,7 +55,7 @@ export default function DashboardPage() {
           choferes: choferes?.length || 0,
           jornadasHoy,
           alertasPendientes: (alertas || []).filter((a: any) => !a.resuelto).length,
-          jornadasTotal: jornadas?.length || 0
+          jornadasTotal: jornadas.length
         })
       } catch (error) {
         console.error('Error:', error)

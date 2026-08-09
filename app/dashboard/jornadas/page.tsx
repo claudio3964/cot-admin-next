@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import ModalDetalle from './components/ModalDetalle'
+import ModalConfirmarBorrado from './components/ModalConfirmarBorrado'
 import type { Jornada, JornadaData } from './types'
 
 const SB_URL = 'https://frjeivfpldcigklwepqt.supabase.co'
@@ -32,6 +33,7 @@ export default function JornadasPage() {
   const [pagina, setPagina] = useState(1)
   const [selectedJornada, setSelectedJornada] = useState<Jornada | null>(null)
   const [showModal, setShowModal] = useState(false)
+  const [jornadaABorrar, setJornadaABorrar] = useState<Jornada | null>(null)
 
   // Filtros
   const [filtroChofer, setFiltroChofer] = useState('')
@@ -73,6 +75,8 @@ export default function JornadasPage() {
 
     filtradas = filtradas.filter(j => {
       const d = parseJornadaData(j)
+
+      if (d.deleted) return false
 
       if (filtroChofer) {
         const nombre = (d.driverName || '').toLowerCase()
@@ -118,7 +122,7 @@ export default function JornadasPage() {
     if (!orderNumber) return
 
     const jornada = allJornadas.find(j => j.order_number === orderNumber)
-    if (jornada) {
+    if (jornada && (!parseJornadaData(jornada).deleted || esSuperAdmin)) {
       abrirDetalle(jornada)
     } else {
       alert(`No se encontró la jornada ${orderNumber} entre las últimas ${allJornadas.length} cargadas.`)
@@ -349,14 +353,24 @@ export default function JornadasPage() {
                         </span>
                       </td>
                       <td className="px-4 py-3 text-center" onClick={(e) => e.stopPropagation()}>
-                        {closed && (
-                          <button
-                            onClick={() => exportarJSON(j)}
-                            className="bg-cyan-500/10 border border-cyan-500/30 text-cyan-400 rounded-md px-3 py-1 text-xs hover:bg-cyan-500/20 transition"
-                          >
-                            JSON
-                          </button>
-                        )}
+                        <div className="flex justify-center gap-2">
+                          {closed && (
+                            <button
+                              onClick={() => exportarJSON(j)}
+                              className="bg-cyan-500/10 border border-cyan-500/30 text-cyan-400 rounded-md px-3 py-1 text-xs hover:bg-cyan-500/20 transition"
+                            >
+                              JSON
+                            </button>
+                          )}
+                          {esSuperAdmin && (
+                            <button
+                              onClick={() => setJornadaABorrar(j)}
+                              className="bg-red-500/10 border border-red-500/30 text-red-400 rounded-md px-3 py-1 text-xs hover:bg-red-500/20 transition"
+                            >
+                              🗑
+                            </button>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   )
@@ -375,6 +389,18 @@ export default function JornadasPage() {
           parseJornadaData={parseJornadaData}
           esSuperAdmin={esSuperAdmin}
           onEditar={handleEditarJornada}
+        />
+      )}
+
+      {jornadaABorrar && (
+        <ModalConfirmarBorrado
+          orderNumber={jornadaABorrar.order_number}
+          onClose={() => setJornadaABorrar(null)}
+          onBorrado={() => {
+            setJornadaABorrar(null)
+            cerrarModal()
+            cargarJornadas()
+          }}
         />
       )}
     </>

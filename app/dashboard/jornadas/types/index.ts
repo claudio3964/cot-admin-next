@@ -43,6 +43,10 @@ export interface JornadaData {
     monto?: number
   }
   viaticos?: number
+  deleted?: boolean
+  deleted_at?: number
+  deleted_by?: string
+  deleted_reason?: string
 }
 
 export interface Jornada {

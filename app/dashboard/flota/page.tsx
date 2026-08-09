@@ -58,6 +58,7 @@ export default function FlotaPage() {
       ;(jornadas || []).forEach((j: any) => {
         let d = {}
         try { d = typeof j.data === 'string' ? JSON.parse(j.data) : (j.data || {}) } catch {}
+        if ((d as any).deleted) return
         const travels = (d as any).travels || []
         travels.forEach((t: any) => {
           if (t.status === 'cancelado') return

@@ -109,7 +109,9 @@ async function buscarJornadasDelChofer(legajo: string, token: string): Promise<A
   )
   const rows = await res.json()
   if (!Array.isArray(rows)) return []
-  return rows.map(r => ({ orderNumber: r.order_number, data: parseData(r.data) }))
+  return rows
+    .map(r => ({ orderNumber: r.order_number, data: parseData(r.data) }))
+    .filter(j => !j.data.deleted)
 }
 
 function travelsAConflicto(travels: TravelRaw[]): ViajeParaConflicto[] {
@@ -426,6 +428,7 @@ export default function ModalEditarAsignacion({ mensaje, onClose, onGuardado }: 
       if (!Array.isArray(rows)) return null
       for (const row of rows) {
         const data = typeof row.data === 'string' ? JSON.parse(row.data) : (row.data || {})
+        if (data.deleted) continue
         if (!data.closed) {
           return { orderNumber: row.order_number, fecha: row.fecha }
         }

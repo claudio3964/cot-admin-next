@@ -285,6 +285,7 @@ export default function MensajesPage() {
       if (!Array.isArray(rows)) return null
       for (const row of rows) {
         const data = typeof row.data === 'string' ? JSON.parse(row.data) : (row.data || {})
+        if (data.deleted) continue
         if (!data.closed) {
           return { orderNumber: row.order_number, fecha: row.fecha }
         }

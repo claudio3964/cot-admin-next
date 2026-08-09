@@ -45,6 +45,10 @@ interface JornadaData {
     monto?: number
   }
   viaticos?: number
+  deleted?: boolean
+  deleted_at?: number
+  deleted_by?: string
+  deleted_reason?: string
 }
 
 interface Jornada {
@@ -121,6 +125,14 @@ export default function ModalDetalle({
         </div>
 
         <div className="p-6">
+          {d.deleted && (
+            <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-3 mb-6 text-sm text-red-400">
+              🗑 Jornada borrada por <span className="font-semibold">{d.deleted_by || '—'}</span>
+              {d.deleted_at && ` el ${new Date(d.deleted_at).toLocaleString('es-UY')}`}
+              {d.deleted_reason && <div className="mt-1 text-red-300">Motivo: {d.deleted_reason}</div>}
+            </div>
+          )}
+
           {/* Tarjetas resumen - mismo código que antes */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
             <div className="bg-[#1c2537] rounded-lg p-3">
