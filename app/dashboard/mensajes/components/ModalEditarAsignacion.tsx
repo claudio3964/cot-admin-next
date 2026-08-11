@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { encontrarConflicto, parsearInicioGuardiaMs, type ViajeParaConflicto } from '@/lib/solapamiento'
 import { encontrarUltimoDestino, type ViajeParaContinuidad } from '@/lib/continuidad'
+import { buscarJornadasDelChofer, type GuardiaRaw } from '@/lib/jornadas'
 
 const SB_URL = 'https://frjeivfpldcigklwepqt.supabase.co'
 const SB_KEY = 'sb_publishable_6A7tufjD-rTAUAPfxyziyw_3kXMumzJ'
@@ -73,13 +74,6 @@ interface TravelRaw {
   kmEmpresa?: number
 }
 
-interface GuardiaRaw {
-  id: string
-  inicio?: string
-  type?: string
-  status?: string
-}
-
 interface ModalEditarAsignacionProps {
   mensaje: Mensaje
   onClose: () => void
@@ -100,18 +94,6 @@ function parseData(raw: unknown): Record<string, any> {
     try { return JSON.parse(raw) } catch { return {} }
   }
   return (raw as Record<string, any>) || {}
-}
-
-async function buscarJornadasDelChofer(legajo: string, token: string): Promise<Array<{ orderNumber: string; data: Record<string, any> }>> {
-  const res = await fetch(
-    `${SB_URL}/rest/v1/jornadas?chofer_id=eq.${legajo}&empresa_id=eq.cot&select=order_number,data&order=id.desc&limit=50`,
-    { headers: { apikey: SB_KEY, Authorization: `Bearer ${token}` } }
-  )
-  const rows = await res.json()
-  if (!Array.isArray(rows)) return []
-  return rows
-    .map(r => ({ orderNumber: r.order_number, data: parseData(r.data) }))
-    .filter(j => !j.data.deleted)
 }
 
 function travelsAConflicto(travels: TravelRaw[]): ViajeParaConflicto[] {

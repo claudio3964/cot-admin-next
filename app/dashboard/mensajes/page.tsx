@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import ModalEditarAsignacion from './components/ModalEditarAsignacion'
+import { buscarJornadasDelChofer, type GuardiaRaw } from '@/lib/jornadas'
 
 const SB_URL = 'https://frjeivfpldcigklwepqt.supabase.co'
 const SB_KEY = 'sb_publishable_6A7tufjD-rTAUAPfxyziyw_3kXMumzJ'
@@ -637,6 +638,148 @@ export default function MensajesPage() {
     }
   }
 
+  const anularGuardia = async (id: number) => {
+    if (!confirm('¿Anular esta guardia? El chofer recibirá un aviso.')) return
+
+    const token = getToken()
+    if (!token) return
+
+    const msgOriginal = mensajes.find(m => m.id === id)
+    if (!msgOriginal) return
+
+    const dataOriginal = (() => {
+      if (typeof msgOriginal.data === 'string') {
+        try { return JSON.parse(msgOriginal.data) } catch { return {} }
+      }
+      return msgOriginal.data || {}
+    })()
+
+    const guardiaId: string | undefined = dataOriginal.guardiaId
+
+    try {
+      if (msgOriginal.leido) {
+        // CASO B: mensaje ya procesado — la guardia real vive en jornadas.data.guards[].
+        // A diferencia de anularAsignacion() (que cancela a ciegas si hay viajeId), acá
+        // chequeamos el status actual ANTES de tocar nada — mismo criterio cauteloso que
+        // ModalEditarAsignacion.tsx para Caso B de edición.
+        if (!guardiaId) {
+          alert('No se puede anular: guardia sin vincular. Contactá con soporte.')
+          return
+        }
+
+        const jornadas = await buscarJornadasDelChofer(msgOriginal.para, token)
+        let guardiaEncontrada: GuardiaRaw | null = null
+        for (const j of jornadas) {
+          const guards: GuardiaRaw[] = j.data?.guards || []
+          const found = guards.find(g => g.id === guardiaId)
+          if (found) { guardiaEncontrada = found; break }
+        }
+
+        if (!guardiaEncontrada) {
+          alert('No se encontró la guardia en la jornada del chofer.')
+          return
+        }
+
+        if (guardiaEncontrada.status !== 'en_curso') {
+          alert(`Solo se pueden anular guardias en curso; esta ya está ${guardiaEncontrada.status}.`)
+          return
+        }
+
+        // Preserva el payload original — solo agrega la marca de anulado.
+        // Nota: este PATCH y el POST de abajo son dos fetch() independientes, sin
+        // transacción — mismo gap de fallo parcial que ya tiene anularAsignacion() para
+        // viajes (si el PATCH tiene éxito y el POST falla por red, el panel muestra
+        // "anulado" pero la guardia real en el celu sigue en_curso). Deuda conocida del
+        // patrón completo, no de esta función puntual — no se resuelve acá.
+        await fetch(`${SB_URL}/rest/v1/mensajes?id=eq.${id}`, {
+          method: 'PATCH',
+          headers: {
+            apikey: SB_KEY,
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json',
+            'Prefer': 'return=minimal'
+          },
+          body: JSON.stringify({
+            leido: true,
+            data: {
+              ...dataOriginal,
+              respuesta: 'anulado',
+              anuladoAt: new Date().toISOString(),
+              anuladoPor: getAdminEmail()
+            }
+          })
+        })
+
+        // La guardia ya está en curso en el celular — cancelarla estructuralmente con el
+        // mismo tipo que ya procesa MensajesPollingWorker (repo.cancelarGuardia()).
+        await fetch(`${SB_URL}/rest/v1/mensajes`, {
+          method: 'POST',
+          headers: {
+            apikey: SB_KEY,
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json',
+            'Prefer': 'return=minimal'
+          },
+          body: JSON.stringify({
+            empresa_id: 'cot',
+            de: 'admin',
+            para: msgOriginal.para,
+            tipo: 'cancelar_guardia',
+            texto: '🚫 Una guardia fue anulada por tránsito.',
+            data: { guardiaId },
+            leido: false
+          })
+        })
+      } else {
+        // CASO A: todavía no fue procesada por el chofer — no hay guardia real que cancelar,
+        // el PATCH con respuesta:'anulado' alcanza (mensajeSigueVigente() bloquea la creación
+        // si el worker llega a procesarla tarde). Mismo aviso por texto que usa
+        // anularAsignacion() en su Caso A, mismo criterio de consistencia con el chofer.
+        await fetch(`${SB_URL}/rest/v1/mensajes?id=eq.${id}`, {
+          method: 'PATCH',
+          headers: {
+            apikey: SB_KEY,
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json',
+            'Prefer': 'return=minimal'
+          },
+          body: JSON.stringify({
+            leido: true,
+            data: {
+              ...dataOriginal,
+              respuesta: 'anulado',
+              anuladoAt: new Date().toISOString(),
+              anuladoPor: getAdminEmail()
+            }
+          })
+        })
+
+        await fetch(`${SB_URL}/rest/v1/mensajes`, {
+          method: 'POST',
+          headers: {
+            apikey: SB_KEY,
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json',
+            'Prefer': 'return=minimal'
+          },
+          body: JSON.stringify({
+            empresa_id: 'cot',
+            de: 'admin',
+            para: msgOriginal.para,
+            tipo: 'urgente',
+            texto: '🚫 Una guardia fue anulada por tránsito. Consultá con tu despachador.',
+            leido: false
+          })
+        })
+      }
+
+      cargarMensajes()
+    } catch (error) {
+      console.error('Error anulando guardia:', error)
+      alert('❌ Error al anular')
+    }
+  }
+
   const filtrarMensajes = () => {
     let lista = mensajes
     if (filtro === 'no-leido') lista = lista.filter(m => !m.leido)
@@ -974,6 +1117,7 @@ export default function MensajesPage() {
                   }
                   if (parsed.guardia) {
                     viajeData = parsed.guardia
+                    respuesta = parsed.respuesta || null
                   }
                 } catch {}
               }
@@ -1021,7 +1165,7 @@ export default function MensajesPage() {
                            '✕ Rechazado'}
                         </div>
                       )}
-                      {!respuesta && msg.tipo === 'asignacion' && (
+                      {!respuesta && (msg.tipo === 'asignacion' || msg.tipo === 'guardia') && (
                         <div className="mt-2 text-xs text-yellow-400">⏳ Sin respuesta</div>
                       )}
                       {!respuesta && msg.tipo === 'asignacion' && (
@@ -1030,6 +1174,14 @@ export default function MensajesPage() {
                           className="mt-2 text-xs text-red-400 border border-red-400/30 rounded-md px-3 py-1 hover:bg-red-500/10 transition"
                         >
                           🚫 Anular asignación
+                        </button>
+                      )}
+                      {!respuesta && msg.tipo === 'guardia' && (
+                        <button
+                          onClick={() => anularGuardia(msg.id)}
+                          className="mt-2 text-xs text-red-400 border border-red-400/30 rounded-md px-3 py-1 hover:bg-red-500/10 transition"
+                        >
+                          🚫 Anular guardia
                         </button>
                       )}
                       {respuesta !== 'anulado' && (
