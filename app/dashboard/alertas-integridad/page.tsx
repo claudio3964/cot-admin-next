@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { RefreshCw, AlertTriangle, CheckCircle2, ArrowRight, MapPin, Route, Clock } from 'lucide-react'
 
 const SB_URL = 'https://frjeivfpldcigklwepqt.supabase.co'
 const SB_KEY = 'sb_publishable_6A7tufjD-rTAUAPfxyziyw_3kXMumzJ'
@@ -32,6 +33,7 @@ export default function AlertasIntegridadPage() {
   const [continuidad, setContinuidad] = useState<InconsistenciaContinuidad[]>([])
   const [cierre, setCierre] = useState<InconsistenciaCierre[]>([])
   const [loading, setLoading] = useState(true)
+  const [mounted, setMounted] = useState(false)
 
   const cargar = async () => {
     const token = getToken()
@@ -63,6 +65,7 @@ export default function AlertasIntegridadPage() {
   }
 
   useEffect(() => {
+    setMounted(true)
     const token = getToken()
     if (!token) {
       router.push('/login')
@@ -95,101 +98,158 @@ export default function AlertasIntegridadPage() {
 
   if (loading) {
     return (
-      <div className="bg-[#111827] border border-[#1e2d45] rounded-xl p-8 text-center">
-        <div className="text-[#cbd5e1]">Cargando inconsistencias...</div>
+      <div className="flex items-center justify-center py-20">
+        <div className="flex items-center gap-3 text-[#64748b]">
+          <RefreshCw className="w-5 h-5 animate-spin" />
+          Cargando inconsistencias...
+        </div>
       </div>
     )
   }
 
   return (
-    <div>
-      {/* Resumen */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-        <div className="bg-[#111827] border border-[#1e2d45] rounded-xl p-4">
-          <div className="text-xs text-[#cbd5e1] uppercase tracking-wider">Continuidad al asignar</div>
-          <div className="text-2xl font-mono font-bold text-orange-400">{continuidad.length}</div>
+    <div className={`
+      space-y-6 transition-all duration-500
+      ${mounted ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'}
+    `}>
+      {/* KPIs */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div className="bg-[#111827]/60 backdrop-blur-sm border border-white/[0.06] rounded-xl p-5">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-[11px] font-semibold text-[#64748b] uppercase tracking-wider">Continuidad al asignar</span>
+            <Route className="w-4 h-4 text-[#f97316]" />
+          </div>
+          <div className="text-3xl font-bold text-[#f97316]">{continuidad.length}</div>
         </div>
-        <div className="bg-[#111827] border border-[#1e2d45] rounded-xl p-4">
-          <div className="text-xs text-[#cbd5e1] uppercase tracking-wider">Continuidad al cerrar</div>
-          <div className="text-2xl font-mono font-bold text-orange-400">{cierre.length}</div>
+        <div className="bg-[#111827]/60 backdrop-blur-sm border border-white/[0.06] rounded-xl p-5">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-[11px] font-semibold text-[#64748b] uppercase tracking-wider">Continuidad al cerrar</span>
+            <MapPin className="w-4 h-4 text-[#f97316]" />
+          </div>
+          <div className="text-3xl font-bold text-[#f97316]">{cierre.length}</div>
         </div>
       </div>
 
-      <div className="flex items-center justify-end mb-4">
+      {/* Botón refrescar */}
+      <div className="flex items-center justify-end">
         <button
           onClick={cargar}
-          className="bg-transparent border border-[#1e2d45] rounded-lg px-4 py-2 text-sm text-[#cbd5e1] hover:border-[#3b82f6] hover:text-[#3b82f6] transition"
+          className="flex items-center gap-2 bg-[#1c2537] border border-[#1e293b] rounded-lg px-4 py-2.5 text-sm text-[#94a3b8] hover:border-[#3b82f6]/50 hover:text-[#3b82f6] transition-all duration-200"
         >
-          ↺ Actualizar
+          <RefreshCw className="w-4 h-4" />
+          Actualizar
         </button>
       </div>
 
-      {/* Sección: continuidad al asignar (paso 4) */}
-      <h2 className="text-sm font-semibold text-white mb-3">Continuidad al asignar</h2>
-      <div className="space-y-3 mb-8">
-        {continuidad.length === 0 ? (
-          <div className="bg-[#111827] border border-[#1e2d45] rounded-xl p-8 text-center">
-            <div className="text-4xl mb-2">✅</div>
-            <p className="text-[#cbd5e1]">Sin inconsistencias registradas</p>
-          </div>
-        ) : (
-          continuidad.map((c) => (
-            <div
-              key={c.id}
-              className="bg-[#111827] border border-orange-500/30 border-l-4 border-l-orange-500 rounded-xl p-4"
-            >
-              <div className="flex items-center gap-3 mb-1">
-                <span className="font-semibold text-white">⚠️ Legajo {c.legajo || '—'}</span>
-                {c.confirmado_por && (
-                  <span className="text-xs text-[#94a3b8]">confirmado por {c.confirmado_por}</span>
-                )}
-              </div>
-              <div className="text-sm text-[#cbd5e1] font-mono space-y-0.5">
-                <div>Origen declarado: <span className="text-[#e2e8f0]">{c.origen_declarado}</span></div>
-                <div>Destino esperado: <span className="text-[#e2e8f0]">{c.destino_esperado}</span></div>
-                <div className="text-xs text-[#94a3b8]">{formatearFecha(c.creado_at)}</div>
-              </div>
+      {/* Sección: Continuidad al asignar */}
+      <div>
+        <h2 className="text-lg font-semibold text-white mb-3 flex items-center gap-2">
+          <Route className="w-5 h-5 text-[#f97316]" />
+          Continuidad al asignar
+        </h2>
+        <div className="space-y-3">
+          {continuidad.length === 0 ? (
+            <div className="bg-[#111827]/40 backdrop-blur-sm border border-white/[0.06] rounded-xl p-12 text-center">
+              <CheckCircle2 className="w-12 h-12 text-[#10b981] mx-auto mb-3" />
+              <p className="text-[#94a3b8]">Sin inconsistencias registradas</p>
             </div>
-          ))
-        )}
-      </div>
-
-      {/* Sección: continuidad al cerrar jornada (paso 5) */}
-      <h2 className="text-sm font-semibold text-white mb-3">Continuidad al cerrar jornada</h2>
-      <div className="space-y-3">
-        {cierre.length === 0 ? (
-          <div className="bg-[#111827] border border-[#1e2d45] rounded-xl p-8 text-center">
-            <div className="text-4xl mb-2">✅</div>
-            <p className="text-[#cbd5e1]">Sin inconsistencias registradas</p>
-          </div>
-        ) : (
-          cierre.map((c) => (
-            <div
-              key={c.id}
-              className="bg-[#111827] border border-orange-500/30 border-l-4 border-l-orange-500 rounded-xl p-4"
-            >
-              <div className="flex flex-wrap items-start justify-between gap-4">
-                <div className="flex-1 min-w-[200px]">
-                  <div className="flex items-center gap-3 mb-1">
-                    <span className="font-semibold text-white">⚠️ Legajo {c.legajo || '—'}</span>
-                    <span className="text-xs text-[#cbd5e1] font-mono">Orden {c.order_number}</span>
+          ) : (
+            continuidad.map((c) => (
+              <div
+                key={c.id}
+                className="bg-[#111827]/60 backdrop-blur-sm border border-white/[0.06] border-l-4 border-l-[#f97316] rounded-xl p-5 hover:border-[#f97316]/20 transition-all duration-300"
+              >
+                <div className="flex items-center gap-2 mb-2">
+                  <AlertTriangle className="w-4 h-4 text-[#f97316]" />
+                  <span className="font-semibold text-white">Legajo {c.legajo || '—'}</span>
+                  {c.confirmado_por && (
+                    <span className="text-[11px] text-[#64748b] bg-[#1c2537] px-2 py-0.5 rounded-full">
+                      confirmado por {c.confirmado_por}
+                    </span>
+                  )}
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm">
+                  <div className="flex items-center gap-2 text-[#94a3b8]">
+                    <MapPin className="w-3.5 h-3.5 text-[#475569]" />
+                    <span className="text-[11px]">
+                      Origen declarado: <span className="text-[#e2e8f0] font-mono">{c.origen_declarado}</span>
+                    </span>
                   </div>
-                  <div className="text-sm text-[#cbd5e1] font-mono space-y-0.5">
-                    <div>Destino final: <span className="text-[#e2e8f0]">{c.destino_final}</span></div>
-                    <div>Base esperada: <span className="text-[#e2e8f0]">{c.base_chofer}</span></div>
-                    <div className="text-xs text-[#94a3b8]">{formatearFecha(c.creado_at)}</div>
+                  <div className="flex items-center gap-2 text-[#94a3b8]">
+                    <Route className="w-3.5 h-3.5 text-[#475569]" />
+                    <span className="text-[11px]">
+                      Destino esperado: <span className="text-[#e2e8f0] font-mono">{c.destino_esperado}</span>
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2 text-[#64748b] sm:col-span-2">
+                    <Clock className="w-3.5 h-3.5" />
+                    <span className="text-[11px]">{formatearFecha(c.creado_at)}</span>
                   </div>
                 </div>
-                <button
-                  onClick={() => verJornada(c.order_number)}
-                  className="bg-transparent border border-[#1e2d45] rounded-lg px-4 py-2 text-sm text-[#cbd5e1] hover:border-[#3b82f6] hover:text-[#3b82f6] transition flex-shrink-0"
-                >
-                  Ver jornada →
-                </button>
               </div>
+            ))
+          )}
+        </div>
+      </div>
+
+      {/* Sección: Continuidad al cerrar jornada */}
+      <div>
+        <h2 className="text-lg font-semibold text-white mb-3 flex items-center gap-2">
+          <MapPin className="w-5 h-5 text-[#f97316]" />
+          Continuidad al cerrar jornada
+        </h2>
+        <div className="space-y-3">
+          {cierre.length === 0 ? (
+            <div className="bg-[#111827]/40 backdrop-blur-sm border border-white/[0.06] rounded-xl p-12 text-center">
+              <CheckCircle2 className="w-12 h-12 text-[#10b981] mx-auto mb-3" />
+              <p className="text-[#94a3b8]">Sin inconsistencias registradas</p>
             </div>
-          ))
-        )}
+          ) : (
+            cierre.map((c) => (
+              <div
+                key={c.id}
+                className="bg-[#111827]/60 backdrop-blur-sm border border-white/[0.06] border-l-4 border-l-[#f97316] rounded-xl p-5 hover:border-[#f97316]/20 transition-all duration-300"
+              >
+                <div className="flex flex-wrap items-start justify-between gap-4">
+                  <div className="flex-1 min-w-[200px]">
+                    <div className="flex items-center gap-2 mb-2">
+                      <AlertTriangle className="w-4 h-4 text-[#f97316]" />
+                      <span className="font-semibold text-white">Legajo {c.legajo || '—'}</span>
+                      <span className="text-[11px] text-[#64748b] font-mono bg-[#1c2537] px-2 py-0.5 rounded-full">
+                        Orden {c.order_number}
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm">
+                      <div className="flex items-center gap-2 text-[#94a3b8]">
+                        <MapPin className="w-3.5 h-3.5 text-[#475569]" />
+                        <span className="text-[11px]">
+                          Destino final: <span className="text-[#e2e8f0] font-mono">{c.destino_final}</span>
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2 text-[#94a3b8]">
+                        <Route className="w-3.5 h-3.5 text-[#475569]" />
+                        <span className="text-[11px]">
+                          Base esperada: <span className="text-[#e2e8f0] font-mono">{c.base_chofer}</span>
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2 text-[#64748b] sm:col-span-2">
+                        <Clock className="w-3.5 h-3.5" />
+                        <span className="text-[11px]">{formatearFecha(c.creado_at)}</span>
+                      </div>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => verJornada(c.order_number)}
+                    className="flex items-center gap-1.5 bg-[#1c2537] border border-[#1e293b] rounded-lg px-4 py-2 text-sm text-[#94a3b8] hover:border-[#3b82f6]/50 hover:text-[#3b82f6] transition-all duration-200 flex-shrink-0"
+                  >
+                    Ver jornada
+                    <ArrowRight className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
       </div>
     </div>
   )

@@ -2,6 +2,21 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import {
+  Search,
+  Calendar,
+  Filter,
+  ChevronLeft,
+  ChevronRight,
+  X,
+  FileJson,
+  Trash2,
+  Loader2,
+  Route,
+  Clock,
+  User,
+  FileText
+} from 'lucide-react'
 import ModalDetalle from './components/ModalDetalle'
 import ModalConfirmarBorrado from './components/ModalConfirmarBorrado'
 import type { Jornada, JornadaData } from './types'
@@ -34,6 +49,7 @@ export default function JornadasPage() {
   const [selectedJornada, setSelectedJornada] = useState<Jornada | null>(null)
   const [showModal, setShowModal] = useState(false)
   const [jornadaABorrar, setJornadaABorrar] = useState<Jornada | null>(null)
+  const [mounted, setMounted] = useState(false)
 
   // Filtros
   const [filtroChofer, setFiltroChofer] = useState('')
@@ -41,7 +57,6 @@ export default function JornadasPage() {
   const [filtroEstado, setFiltroEstado] = useState('')
   const [filtroTipo, setFiltroTipo] = useState('')
 
-  // Rol del usuario
   const userRol = typeof window !== 'undefined' ? getAdminRol() : ''
   const esSuperAdmin = userRol === 'superadmin'
 
@@ -75,7 +90,6 @@ export default function JornadasPage() {
 
     filtradas = filtradas.filter(j => {
       const d = parseJornadaData(j)
-
       if (d.deleted) return false
 
       if (filtroChofer) {
@@ -87,10 +101,8 @@ export default function JornadasPage() {
       }
 
       if (filtroFecha && d.date !== filtroFecha) return false
-
       if (filtroEstado === 'cerrada' && !d.closed) return false
       if (filtroEstado === 'curso' && d.closed) return false
-
       if (filtroTipo && (d.tipo || 'contratado') !== filtroTipo) return false
 
       return true
@@ -101,6 +113,7 @@ export default function JornadasPage() {
   }
 
   useEffect(() => {
+    setMounted(true)
     const token = getToken()
     if (!token) {
       router.push('/login')
@@ -113,8 +126,6 @@ export default function JornadasPage() {
     aplicarFiltros(allJornadas)
   }, [filtroChofer, filtroFecha, filtroEstado, filtroTipo])
 
-  // Deep-link desde la tab de Inconsistencias (?order_number=XXX): abre el
-  // detalle de esa jornada apenas se termina de cargar la lista.
   useEffect(() => {
     if (allJornadas.length === 0) return
     const params = new URLSearchParams(window.location.search)
@@ -152,9 +163,7 @@ export default function JornadasPage() {
   }
 
   const handleEditarJornada = () => {
-    // Por ahora solo un aviso, después implementaremos el modal de edición
     alert('✏️ Edición de jornada - Próximamente')
-    // Aquí irá la lógica para abrir el modal de edición
   }
 
   const exportarJSON = (jornada: Jornada) => {
@@ -211,76 +220,120 @@ export default function JornadasPage() {
 
   if (loading) {
     return (
-      <div className="bg-[#111827] border border-[#1e2d45] rounded-xl p-8 text-center">
-        <div className="text-[#cbd5e1]">Cargando jornadas...</div>
+      <div className="flex items-center justify-center py-20">
+        <div className="flex items-center gap-3 text-[#64748b]">
+          <Loader2 className="w-5 h-5 animate-spin" />
+          Cargando jornadas...
+        </div>
       </div>
     )
   }
 
   return (
     <>
-      <div className="bg-[#111827] border border-[#1e2d45] rounded-xl overflow-hidden">
-        {/* Filtros */}
-        <div className="p-4 border-b border-[#1e2d45] flex flex-wrap gap-3">
-          <input
-            type="text"
-            placeholder="🔍 Chofer o legajo..."
-            value={filtroChofer}
-            onChange={(e) => setFiltroChofer(e.target.value)}
-            className="bg-[#1c2537] border border-[#1e2d45] rounded-lg px-3 py-2 text-sm text-white placeholder:text-[#94a3b8] outline-none focus:border-[#3b82f6]"
-          />
-          <input
-            type="date"
-            value={filtroFecha}
-            onChange={(e) => setFiltroFecha(e.target.value)}
-            className="bg-[#1c2537] border border-[#1e2d45] rounded-lg px-3 py-2 text-sm text-white outline-none focus:border-[#3b82f6]"
-          />
-          <select
-            value={filtroEstado}
-            onChange={(e) => setFiltroEstado(e.target.value)}
-            className="bg-[#1c2537] border border-[#1e2d45] rounded-lg px-3 py-2 text-sm text-white outline-none focus:border-[#3b82f6]"
-          >
-            <option value="">Todos los estados</option>
-            <option value="cerrada">✓ Cerradas</option>
-            <option value="curso">● En curso</option>
-          </select>
-          <select
-            value={filtroTipo}
-            onChange={(e) => setFiltroTipo(e.target.value)}
-            className="bg-[#1c2537] border border-[#1e2d45] rounded-lg px-3 py-2 text-sm text-white outline-none focus:border-[#3b82f6]"
-          >
-            <option value="">Todos los tipos</option>
-            <option value="efectivo">Efectivo</option>
-            <option value="contratado">Contratado</option>
-          </select>
-          <button
-            onClick={limpiarFiltros}
-            className="bg-transparent border border-[#1e2d45] rounded-lg px-4 py-2 text-sm text-[#cbd5e1] hover:border-[#3b82f6] hover:text-[#3b82f6] transition"
-          >
-            ✕ Limpiar
-          </button>
+      <div className={`
+        bg-[#111827]/60 backdrop-blur-sm border border-white/[0.06] rounded-xl overflow-hidden
+        transition-all duration-500 ${mounted ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'}
+      `}>
+        {/* Header + Filtros */}
+        <div className="p-5 border-b border-white/[0.06] space-y-4">
+          <div className="flex items-center justify-between">
+            <h2 className="text-lg font-semibold text-white flex items-center gap-2">
+              <Route className="w-5 h-5 text-[#3b82f6]" />
+              Jornadas registradas
+            </h2>
+            <span className="text-[11px] text-[#475569] font-mono">
+              {jornadasFiltradas.length} registros
+            </span>
+          </div>
+
+          <div className="flex flex-wrap gap-3">
+            <div className="relative flex-1 min-w-[200px]">
+              <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#475569]" />
+              <input
+                type="text"
+                placeholder="Buscar chofer o legajo..."
+                value={filtroChofer}
+                onChange={(e) => setFiltroChofer(e.target.value)}
+                className="
+                  w-full bg-[#0f172a]/60 border border-[#1e293b] rounded-lg 
+                  pl-10 pr-4 py-2.5 text-sm text-white placeholder:text-[#475569] 
+                  outline-none transition-all duration-300
+                  focus:border-[#3b82f6]/50 focus:ring-2 focus:ring-[#3b82f6]/10
+                "
+              />
+            </div>
+            <div className="relative">
+              <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#475569]" />
+              <input
+                type="date"
+                value={filtroFecha}
+                onChange={(e) => setFiltroFecha(e.target.value)}
+                className="
+                  bg-[#0f172a]/60 border border-[#1e293b] rounded-lg 
+                  pl-10 pr-4 py-2.5 text-sm text-white outline-none 
+                  transition-all duration-300 focus:border-[#3b82f6]/50
+                "
+              />
+            </div>
+            <select
+              value={filtroEstado}
+              onChange={(e) => setFiltroEstado(e.target.value)}
+              className="
+                bg-[#0f172a]/60 border border-[#1e293b] rounded-lg px-4 py-2.5 
+                text-sm text-white outline-none transition-all duration-300 
+                focus:border-[#3b82f6]/50
+              "
+            >
+              <option value="">Todos los estados</option>
+              <option value="cerrada">Cerradas</option>
+              <option value="curso">En curso</option>
+            </select>
+            <select
+              value={filtroTipo}
+              onChange={(e) => setFiltroTipo(e.target.value)}
+              className="
+                bg-[#0f172a]/60 border border-[#1e293b] rounded-lg px-4 py-2.5 
+                text-sm text-white outline-none transition-all duration-300 
+                focus:border-[#3b82f6]/50
+              "
+            >
+              <option value="">Todos los tipos</option>
+              <option value="efectivo">Efectivo</option>
+              <option value="contratado">Contratado</option>
+            </select>
+            <button
+              onClick={limpiarFiltros}
+              className="flex items-center gap-1.5 bg-[#1c2537] border border-[#1e293b] rounded-lg px-4 py-2.5 text-sm text-[#94a3b8] hover:border-[#ef4444]/50 hover:text-[#ef4444] transition-all duration-200"
+            >
+              <X className="w-4 h-4" />
+              Limpiar
+            </button>
+          </div>
         </div>
 
-        {/* Info y paginación */}
-        <div className="px-4 py-2 text-xs text-[#cbd5e1] font-mono border-b border-[#1e2d45] flex justify-between items-center">
-          <span>
-            Mostrando {jornadasFiltradas.length ? inicio + 1 : 0}–{Math.min(inicio + JORNADAS_POR_PAGINA, jornadasFiltradas.length)} de {jornadasFiltradas.length} jornadas
+        {/* Paginación */}
+        <div className="px-5 py-3 border-b border-white/[0.06] flex justify-between items-center">
+          <span className="text-[11px] text-[#475569] font-mono">
+            {jornadasFiltradas.length ? inicio + 1 : 0}–{Math.min(inicio + JORNADAS_POR_PAGINA, jornadasFiltradas.length)} de {jornadasFiltradas.length}
           </span>
-          <div className="flex gap-2">
+          <div className="flex items-center gap-2">
             <button
               onClick={() => setPagina(p => Math.max(1, p - 1))}
               disabled={pagina === 1}
-              className="px-2 py-1 rounded border border-[#1e2d45] disabled:opacity-50 disabled:cursor-not-allowed hover:border-[#3b82f6]"
+              className="flex items-center gap-1 px-3 py-1.5 rounded-lg border border-[#1e293b] text-[#94a3b8] text-xs disabled:opacity-40 disabled:cursor-not-allowed hover:border-[#3b82f6]/50 hover:text-[#3b82f6] transition-all duration-200"
             >
-              ◀
+              <ChevronLeft className="w-4 h-4" />
             </button>
-            <span className="px-2 py-1">Pág {pagina} / {totalPaginas || 1}</span>
+            <span className="text-xs text-[#64748b] font-mono px-2">
+              {pagina} / {totalPaginas || 1}
+            </span>
             <button
               onClick={() => setPagina(p => Math.min(totalPaginas, p + 1))}
               disabled={pagina === totalPaginas || totalPaginas === 0}
-              className="px-2 py-1 rounded border border-[#1e2d45] disabled:opacity-50 disabled:cursor-not-allowed hover:border-[#3b82f6]"
+              className="flex items-center gap-1 px-3 py-1.5 rounded-lg border border-[#1e293b] text-[#94a3b8] text-xs disabled:opacity-40 disabled:cursor-not-allowed hover:border-[#3b82f6]/50 hover:text-[#3b82f6] transition-all duration-200"
             >
-              ▶
+              <ChevronRight className="w-4 h-4" />
             </button>
           </div>
         </div>
@@ -288,31 +341,28 @@ export default function JornadasPage() {
         {/* Tabla */}
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
-            <thead className="bg-[#1c2537] border-b border-[#1e2d45]">
+            <thead className="bg-[#0f172a]/40 border-b border-white/[0.06]">
               <tr>
-                <th className="px-4 py-3 text-left text-xs font-medium text-[#cbd5e1] uppercase">Fecha</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-[#cbd5e1] uppercase">Chofer</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-[#cbd5e1] uppercase">Legajo</th>
-                <th className="px-4 py-3 text-center text-xs font-medium text-[#cbd5e1] uppercase">Viajes</th>
-                <th className="px-4 py-3 text-center text-xs font-medium text-[#cbd5e1] uppercase">Guardias</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-[#cbd5e1] uppercase">Km Total</th>
-                <th className="px-4 py-3 text-center text-xs font-medium text-[#cbd5e1] uppercase">Viáticos</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-[#cbd5e1] uppercase">Monto</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-[#cbd5e1] uppercase">Estado</th>
-                <th className="px-4 py-3 text-center text-xs font-medium text-[#cbd5e1] uppercase">Acciones</th>
+                {['Fecha', 'Chofer', 'Legajo', 'Viajes', 'Guardias', 'Km Total', 'Viáticos', 'Monto', 'Estado', 'Acciones'].map((h) => (
+                  <th key={h} className="px-4 py-3 text-left text-[11px] font-semibold text-[#64748b] uppercase tracking-wider">
+                    {h}
+                  </th>
+                ))}
               </tr>
             </thead>
             <tbody>
               {jornadasPagina.length === 0 ? (
                 <tr>
-                  <td colSpan={10} className="px-4 py-8 text-center text-[#cbd5e1]">
-                    No hay jornadas registradas
+                  <td colSpan={10} className="px-4 py-12 text-center text-[#475569]">
+                    <div className="flex flex-col items-center gap-2">
+                      <FileText className="w-8 h-8 text-[#1e293b]" />
+                      <p>No hay jornadas registradas</p>
+                    </div>
                   </td>
                 </tr>
               ) : (
                 jornadasPagina.map((j) => {
                   const d = parseJornadaData(j)
-
                   const driverName = d?.driverName || j?.chofer_id || 'Sin nombre'
                   const driverLegajo = d?.driverLegajo || j?.chofer_id || 'Sin legajo'
                   const fecha = d?.date || 'Sin fecha'
@@ -331,25 +381,38 @@ export default function JornadasPage() {
                   return (
                     <tr
                       key={j.id}
-                      className="border-b border-[#1e2d45] hover:bg-[#1c2537]/30 cursor-pointer"
+                      className="border-b border-white/[0.03] hover:bg-[#1c2537]/30 cursor-pointer transition-colors"
                       onClick={() => abrirDetalle(j)}
                     >
-                      <td className="px-4 py-3 font-mono text-sm text-[#e2e8f0]">{fecha}</td>
+                      <td className="px-4 py-3 font-mono text-[11px] text-[#94a3b8]">{fecha}</td>
                       <td className="px-4 py-3">
-                        <div className="font-medium text-white">{driverName}</div>
-                        <span className={`text-xs px-2 py-0.5 rounded-full ${tipo === 'efectivo' ? 'bg-blue-500/20 text-blue-400' : 'bg-yellow-500/20 text-yellow-400'}`}>
+                        <div className="font-medium text-white text-sm">{driverName}</div>
+                        <span className={`
+                          text-[10px] px-2 py-0.5 rounded-full border mt-1 inline-block
+                          ${tipo === 'efectivo' 
+                            ? 'bg-[#3b82f6]/10 text-[#3b82f6] border-[#3b82f6]/20' 
+                            : 'bg-[#f59e0b]/10 text-[#f59e0b] border-[#f59e0b]/20'
+                          }
+                        `}>
                           {tipo === 'efectivo' ? 'Efectivo' : 'Contratado'}
                         </span>
                       </td>
-                      <td className="px-4 py-3 font-mono text-sm text-[#e2e8f0]">{driverLegajo}</td>
+                      <td className="px-4 py-3 font-mono text-[11px] text-[#94a3b8]">{driverLegajo}</td>
                       <td className="px-4 py-3 text-center text-[#e2e8f0]">{travels.length}</td>
                       <td className="px-4 py-3 text-center text-[#e2e8f0]">{guards.length}</td>
                       <td className="px-4 py-3 font-mono text-[#e2e8f0]">{Number(kmTotal).toFixed(1)} km</td>
                       <td className="px-4 py-3 text-center text-[#e2e8f0]">{viaticos}</td>
                       <td className="px-4 py-3 font-mono text-[#e2e8f0]">${Math.round(monto)}</td>
                       <td className="px-4 py-3">
-                        <span className={`text-xs px-2 py-1 rounded-full ${closed ? 'bg-green-500/20 text-green-400' : 'bg-yellow-500/20 text-yellow-400'}`}>
-                          {closed ? '✓ Cerrada' : '● En curso'}
+                        <span className={`
+                          inline-flex items-center gap-1 text-[10px] px-2.5 py-1 rounded-full border
+                          ${closed 
+                            ? 'bg-[#10b981]/10 text-[#10b981] border-[#10b981]/20' 
+                            : 'bg-[#f59e0b]/10 text-[#f59e0b] border-[#f59e0b]/20'
+                          }
+                        `}>
+                          <Clock className="w-3 h-3" />
+                          {closed ? 'Cerrada' : 'En curso'}
                         </span>
                       </td>
                       <td className="px-4 py-3 text-center" onClick={(e) => e.stopPropagation()}>
@@ -357,17 +420,18 @@ export default function JornadasPage() {
                           {closed && (
                             <button
                               onClick={() => exportarJSON(j)}
-                              className="bg-cyan-500/10 border border-cyan-500/30 text-cyan-400 rounded-md px-3 py-1 text-xs hover:bg-cyan-500/20 transition"
+                              className="inline-flex items-center gap-1 bg-[#06b6d4]/10 border border-[#06b6d4]/20 text-[#06b6d4] rounded-md px-2.5 py-1 text-[11px] hover:bg-[#06b6d4]/20 transition"
                             >
+                              <FileJson className="w-3 h-3" />
                               JSON
                             </button>
                           )}
                           {esSuperAdmin && (
                             <button
                               onClick={() => setJornadaABorrar(j)}
-                              className="bg-red-500/10 border border-red-500/30 text-red-400 rounded-md px-3 py-1 text-xs hover:bg-red-500/20 transition"
+                              className="inline-flex items-center gap-1 bg-[#ef4444]/10 border border-[#ef4444]/20 text-[#ef4444] rounded-md px-2.5 py-1 text-[11px] hover:bg-[#ef4444]/20 transition"
                             >
-                              🗑
+                              <Trash2 className="w-3 h-3" />
                             </button>
                           )}
                         </div>
@@ -381,7 +445,7 @@ export default function JornadasPage() {
         </div>
       </div>
 
-      {/* Modal de detalle */}
+      {/* Modales */}
       {showModal && selectedJornada && (
         <ModalDetalle
           jornada={selectedJornada}
