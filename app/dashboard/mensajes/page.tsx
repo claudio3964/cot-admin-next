@@ -577,28 +577,28 @@ export default function MensajesPage() {
             <label className="block text-[11px] font-semibold text-[#94a3b8] uppercase tracking-wider mb-1.5">Para</label>
             <select
               value={para}
-              onChange={(e) => setPara(e.target.value)}
-              className="w-full bg-[#0f172a]/60 border border-[#1e293b] rounded-lg px-4 py-2.5 text-sm text-white outline-none focus:border-[#3b82f6]/50 focus:ring-2 focus:ring-[#3b82f6]/10 transition-all"
-            >
-              <option value="todos">Todos los choferes</option>
-              {choferes.map(c => (
-                <option key={c.legajo} value={c.legajo}>{c.nombre} ({c.legajo})</option>
-              ))}
+               onChange={(e) => setPara(e.target.value)}
+               className="w-full bg-[#1c2537] border border-[#1e2d45] rounded-lg px-3 py-2 text-sm text-white outline-none focus:border-[#3b82f6] appearance-none"
+>
+              <option value="todos">💬 Todos los choferes</option>
+               {choferes.map(c => (
+               <option key={c.legajo} value={c.legajo}>{c.nombre} ({c.legajo})</option>
+               ))}
             </select>
           </div>
 
           <div>
             <label className="block text-[11px] font-semibold text-[#94a3b8] uppercase tracking-wider mb-1.5">Tipo</label>
             <select
-              value={tipo}
-              onChange={(e) => setTipo(e.target.value)}
-              className="w-full bg-[#0f172a]/60 border border-[#1e293b] rounded-lg px-4 py-2.5 text-sm text-white outline-none focus:border-[#3b82f6]/50 focus:ring-2 focus:ring-[#3b82f6]/10 transition-all"
-            >
-              <option value="mensaje">Mensaje</option>
-              <option value="asignacion">Asignación de viaje</option>
-              <option value="urgente">Urgente</option>
-              <option value="guardia">Asignación de guardia</option>
-            </select>
+  value={tipo}
+  onChange={(e) => setTipo(e.target.value)}
+  className="w-full bg-[#1c2537] border border-[#1e2d45] rounded-lg px-3 py-2 text-sm text-white outline-none focus:border-[#3b82f6]"
+>
+  <option value="mensaje">💬 Mensaje</option>
+  <option value="asignacion">🚍 Asignación de viaje</option>
+  <option value="urgente">🚨 Urgente</option>
+  <option value="guardia">🛡️ Asignación de guardia</option>
+</select>
           </div>
         </div>
 
@@ -625,7 +625,7 @@ export default function MensajesPage() {
               <div className="relative">
                 <label className="block text-[11px] text-[#94a3b8] mb-1">Origen</label>
                 <div className="relative">
-                  <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#475569] pointer-events-none" />
+                  <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#3b82f6] pointer-events-none" />
                   <input
                     type="text"
                     value={asigOrigenInput}
@@ -649,7 +649,7 @@ export default function MensajesPage() {
               <div className="relative">
                 <label className="block text-[11px] text-[#94a3b8] mb-1">Destino</label>
                 <div className="relative">
-                  <Route className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#475569] pointer-events-none" />
+                  <Route className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#3b82f6] pointer-events-none" />
                   <input
                     type="text"
                     value={asigDestinoInput}
