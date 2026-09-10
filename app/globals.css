@@ -39,6 +39,85 @@ table th {
 .animate-shake {
   animation: shake 0.5s ease-in-out;
 }
+@keyframes login-error {
+  0%, 100% {
+    transform: translateX(0);
+    box-shadow:
+      0 0 0 rgba(239, 68, 68, 0);
+  }
+
+  15% {
+    transform: translateX(-4px);
+  }
+
+  30% {
+    transform: translateX(4px);
+  }
+
+  45% {
+    transform: translateX(-3px);
+  }
+
+  60% {
+    transform: translateX(3px);
+  }
+
+  75% {
+    transform: translateX(-1px);
+  }
+}
+
+.login-error {
+  border-color: rgba(239, 68, 68, 0.9) !important;
+
+  box-shadow:
+    0 0 5px rgba(239, 68, 68, 0.7),
+    0 0 14px rgba(239, 68, 68, 0.45),
+    inset 0 0 10px rgba(239, 68, 68, 0.12);
+
+  animation: login-error 0.6s ease-in-out;
+}
+
+@keyframes login-success {
+  0% {
+    transform: scale(1);
+    box-shadow:
+      0 0 0 rgba(34, 211, 238, 0);
+  }
+
+  40% {
+    transform: scale(1.01);
+    box-shadow:
+      0 0 6px rgba(34, 211, 238, 0.8),
+      0 0 18px rgba(34, 211, 238, 0.55),
+      inset 0 0 12px rgba(34, 211, 238, 0.15);
+  }
+
+  70% {
+    transform: scale(1);
+    box-shadow:
+      0 0 5px rgba(34, 211, 238, 0.7),
+      0 0 14px rgba(34, 211, 238, 0.45),
+      inset 0 0 10px rgba(34, 211, 238, 0.12);
+  }
+
+  100% {
+    transform: scale(1);
+    box-shadow:
+      0 0 0 rgba(34, 211, 238, 0);
+  }
+}
+
+.login-success {
+  border-color: rgba(34, 211, 238, 0.9) !important;
+
+  box-shadow:
+    0 0 5px rgba(34, 211, 238, 0.7),
+    0 0 14px rgba(34, 211, 238, 0.45),
+    inset 0 0 10px rgba(34, 211, 238, 0.12);
+
+  animation: login-success 0.7s ease-in-out;
+}
 
 @keyframes fade-in {
   from { opacity: 0; transform: translateY(-4px); }

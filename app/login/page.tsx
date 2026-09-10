@@ -13,7 +13,8 @@ export default function LoginPage() {
   const [showPass, setShowPass] = useState(false)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
-  const [shake, setShake] = useState(false)
+  const [loginError, setLoginError] = useState(false)
+  const [loginSuccess, setLoginSuccess] = useState(false)
   const [mounted, setMounted] = useState(false)
   const router = useRouter()
 
@@ -22,10 +23,14 @@ export default function LoginPage() {
     return () => clearTimeout(timer)
   }, [])
 
-  const triggerShake = () => {
-    setShake(true)
-    setTimeout(() => setShake(false), 500)
-  }
+  const triggerLoginError = () => {
+  setLoginError(true)
+  setTimeout(() => setLoginError(false), 600)
+}
+
+const triggerLoginSuccess = () => {
+  setLoginSuccess(true)
+}
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -42,7 +47,7 @@ export default function LoginPage() {
 
       if (!res.ok || !data.access_token) {
         setError('Email o contraseña incorrectos')
-        triggerShake()
+        triggerLoginError()
         setLoading(false)
         return
       }
@@ -55,23 +60,27 @@ export default function LoginPage() {
 
       if (!Array.isArray(admins) || admins.length === 0) {
         setError('Usuario no autorizado para este panel')
-        triggerShake()
+        triggerLoginError()
         setLoading(false)
         return
       }
 
-      sessionStorage.setItem('admin_token', data.access_token)
-      sessionStorage.setItem('admin_refresh_token', data.refresh_token || '')
-      sessionStorage.setItem('admin_email', email)
-      sessionStorage.setItem('admin_rol', admins[0].rol)
-      sessionStorage.setItem('admin_nombre', admins[0].nombre)
+     sessionStorage.setItem('admin_token', data.access_token)
+sessionStorage.setItem('admin_refresh_token', data.refresh_token || '')
+sessionStorage.setItem('admin_email', email)
+sessionStorage.setItem('admin_rol', admins[0].rol)
+sessionStorage.setItem('admin_nombre', admins[0].nombre)
 
-      router.push('/dashboard')
-    } catch (err) {
-      setError('Error de conexión')
-      triggerShake()
-      setLoading(false)
-    }
+triggerLoginSuccess()
+
+setTimeout(() => {
+  router.push('/dashboard')
+}, 700)
+} catch (err) {
+  setError('Error de conexión')
+  triggerLoginError()
+  setLoading(false)
+}
   }
 
   return (
@@ -105,7 +114,7 @@ export default function LoginPage() {
           className={`
             bg-[#111827]/80 backdrop-blur-xl border border-white/10 
             rounded-2xl p-10 shadow-2xl shadow-black/50
-            ${shake ? 'animate-shake' : ''}
+            
           `}
         >
           {/* Brand */}
@@ -140,13 +149,16 @@ export default function LoginPage() {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="tu@email.com"
-                className="
-                  w-full bg-[#0f172a]/60 border border-[#1e293b] rounded-xl 
-                  px-4 py-3.5 text-white placeholder-[#334155] 
-                  outline-none transition-all duration-300
-                  focus:border-[#3b82f6]/50 focus:ring-2 focus:ring-[#3b82f6]/10 
-                  focus:bg-[#0f172a]/80
-                "
+                className={`
+  w-full bg-[#0f172a]/60 border border-[#1e293b] rounded-xl 
+  px-4 py-3.5 text-white placeholder-[#334155] 
+  outline-none transition-all duration-300
+  focus:border-[#3b82f6]/50 focus:ring-2 focus:ring-[#3b82f6]/10 
+  focus:bg-[#0f172a]/80
+  ${loginError ? 'login-error' : ''}
+  ${loginSuccess ? 'login-success' : ''}
+`}
+                
                 required
               />
             </div>
@@ -162,13 +174,15 @@ export default function LoginPage() {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="••••••••"
-                  className="
-                    w-full bg-[#0f172a]/60 border border-[#1e293b] rounded-xl 
-                    px-4 py-3.5 pr-11 text-white placeholder-[#334155] 
-                    outline-none transition-all duration-300
-                    focus:border-[#3b82f6]/50 focus:ring-2 focus:ring-[#3b82f6]/10 
-                    focus:bg-[#0f172a]/80
-                  "
+                  className={`
+  w-full bg-[#0f172a]/60 border border-[#1e293b] rounded-xl 
+  px-4 py-3.5 pr-11 text-white placeholder-[#334155] 
+  outline-none transition-all duration-300
+  focus:border-[#3b82f6]/50 focus:ring-2 focus:ring-[#3b82f6]/10 
+  focus:bg-[#0f172a]/80
+  ${loginError ? 'login-error' : ''}
+  ${loginSuccess ? 'login-success' : ''}
+`}
                   required
                 />
                 <button
