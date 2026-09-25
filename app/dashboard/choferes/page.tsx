@@ -134,7 +134,7 @@ export default function ChoferesPage() {
   return (
     <div className={`
       bg-[#111827]/60 backdrop-blur-sm border border-white/[0.06] rounded-xl overflow-hidden
-      transition-all duration-500 ${mounted ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'}
+      transition-all duration-500 ${mounted ? 'opacity-100 translate-none' : 'opacity-0 translate-y-4'}
     `}>
       {/* Header */}
       <div className="p-5 border-b border-white/[0.06] flex flex-wrap items-center justify-between gap-3">

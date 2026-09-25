@@ -233,7 +233,7 @@ export default function JornadasPage() {
     <>
       <div className={`
         bg-[#111827]/60 backdrop-blur-sm border border-white/[0.06] rounded-xl overflow-hidden
-        transition-all duration-500 ${mounted ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'}
+        transition-all duration-500 ${mounted ? 'opacity-100 translate-none' : 'opacity-0 translate-y-4'}
       `}>
         {/* Header + Filtros */}
         <div className="p-5 border-b border-white/[0.06] space-y-4">

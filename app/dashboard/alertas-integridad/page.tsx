@@ -110,7 +110,7 @@ export default function AlertasIntegridadPage() {
   return (
     <div className={`
       space-y-6 transition-all duration-500
-      ${mounted ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'}
+      ${mounted ? 'opacity-100 translate-none' : 'opacity-0 translate-y-4'}
     `}>
       {/* KPIs */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

@@ -118,7 +118,7 @@ export default function DashboardPage() {
                 group relative bg-[#111827]/60 backdrop-blur-sm border border-white/[0.06] 
                 rounded-xl p-5 hover:border-white/10 transition-all duration-500 
                 hover:-translate-y-1 hover:shadow-xl ${card.shadow}
-                ${mounted ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-6'}
+                ${mounted ? 'opacity-100 translate-none' : 'opacity-0 translate-y-6'}
               `}
               style={{ transitionDelay: `${i * 100 + 100}ms` }}
             >
@@ -148,7 +148,7 @@ export default function DashboardPage() {
       <div className={`
         bg-[#111827]/40 backdrop-blur-sm border border-white/[0.06] rounded-xl p-8
         transition-all duration-700 delay-500
-        ${mounted ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-6'}
+        ${mounted ? 'opacity-100 translate-none' : 'opacity-0 translate-y-6'}
       `}>
         <div className="flex flex-col items-center justify-center py-12 text-center">
           <div className="w-16 h-16 rounded-2xl bg-[#1e293b] flex items-center justify-center mb-4">

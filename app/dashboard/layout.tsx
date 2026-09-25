@@ -123,7 +123,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       {/* CONTENIDO */}
       <main className={`
         p-6 max-w-7xl mx-auto transition-all duration-500
-        ${mounted ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'}
+        ${mounted ? 'opacity-100 translate-none' : 'opacity-0 translate-y-4'}
       `}>
         {children}
       </main>

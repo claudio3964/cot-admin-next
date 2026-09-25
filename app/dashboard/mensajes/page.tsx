@@ -563,7 +563,7 @@ export default function MensajesPage() {
   return (
     <div className={`
       space-y-6 transition-all duration-500
-      ${mounted ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'}
+      ${mounted ? 'opacity-100 translate-none' : 'opacity-0 translate-y-4'}
     `}>
       {/* ===== COMPOSER ===== */}
       <div className="bg-[#111827]/60 backdrop-blur-sm border border-white/[0.06] rounded-xl p-5">
