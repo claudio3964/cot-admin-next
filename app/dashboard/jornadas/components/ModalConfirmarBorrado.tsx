@@ -17,9 +17,10 @@ export default function ModalConfirmarBorrado({ orderNumber, onClose, onBorrado 
   const [error, setError] = useState<string | null>(null)
 
   const confirmar = async () => {
+    // El admin que borra lo resuelve la RPC desde el JWT de la sesión (auth.email()),
+    // no se manda en el body.
     const token = sessionStorage.getItem('admin_token')
-    const adminEmail = sessionStorage.getItem('admin_email')
-    if (!token || !adminEmail) {
+    if (!token) {
       setError('Sesión no encontrada.')
       return
     }
@@ -32,7 +33,6 @@ export default function ModalConfirmarBorrado({ orderNumber, onClose, onBorrado 
         headers: { apikey: SB_KEY, Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({
           p_order_number: orderNumber,
-          p_admin_email: adminEmail,
           p_motivo: motivo.trim()
         })
       })
