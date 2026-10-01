@@ -19,7 +19,8 @@ import {
 } from 'lucide-react'
 import ModalDetalle from './components/ModalDetalle'
 import ModalConfirmarBorrado from './components/ModalConfirmarBorrado'
-import type { Jornada, JornadaData } from './types'
+import ModalEditarViaje from './components/ModalEditarViaje'
+import type { Jornada, JornadaData, Viaje } from './types'
 
 const SB_URL = 'https://frjeivfpldcigklwepqt.supabase.co'
 const SB_KEY = 'sb_publishable_6A7tufjD-rTAUAPfxyziyw_3kXMumzJ'
@@ -49,6 +50,7 @@ export default function JornadasPage() {
   const [selectedJornada, setSelectedJornada] = useState<Jornada | null>(null)
   const [showModal, setShowModal] = useState(false)
   const [jornadaABorrar, setJornadaABorrar] = useState<Jornada | null>(null)
+  const [viajeAEditar, setViajeAEditar] = useState<Viaje | null>(null)
   const [mounted, setMounted] = useState(false)
 
   // Filtros
@@ -60,11 +62,11 @@ export default function JornadasPage() {
   const userRol = typeof window !== 'undefined' ? getAdminRol() : ''
   const esSuperAdmin = userRol === 'superadmin'
 
-  const cargarJornadas = async () => {
+  const cargarJornadas = async (): Promise<Jornada[]> => {
     const token = getToken()
     if (!token) {
       router.push('/login')
-      return
+      return []
     }
 
     setLoading(true)
@@ -75,11 +77,13 @@ export default function JornadasPage() {
         `${SB_URL}/rest/v1/jornadas?empresa_id=eq.cot&select=*&order=id.desc&limit=500`,
         { headers }
       )
-      const data = await res.json()
-      setAllJornadas(data || [])
-      aplicarFiltros(data || [])
+      const data: Jornada[] = (await res.json()) || []
+      setAllJornadas(data)
+      aplicarFiltros(data)
+      return data
     } catch (error) {
       console.error('Error cargando jornadas:', error)
+      return []
     } finally {
       setLoading(false)
     }
@@ -162,8 +166,14 @@ export default function JornadasPage() {
     setSelectedJornada(null)
   }
 
-  const handleEditarJornada = () => {
-    alert('✏️ Edición de jornada - Próximamente')
+  // Después de corregir un viaje: recargar y reabrir el detalle con la jornada nueva.
+  const despuesDeEditarViaje = async () => {
+    setViajeAEditar(null)
+    const orderNumber = selectedJornada?.order_number
+    const data = await cargarJornadas()
+    const actualizada = data.find(j => j.order_number === orderNumber)
+    if (actualizada) setSelectedJornada(actualizada)
+    else cerrarModal()
   }
 
   const exportarJSON = (jornada: Jornada) => {
@@ -402,7 +412,17 @@ export default function JornadasPage() {
                       <td className="px-4 py-3 text-center text-[#e2e8f0]">{guards.length}</td>
                       <td className="px-4 py-3 font-mono text-[#e2e8f0]">{Number(kmTotal).toFixed(1)} km</td>
                       <td className="px-4 py-3 text-center text-[#e2e8f0]">{viaticos}</td>
-                      <td className="px-4 py-3 font-mono text-[#e2e8f0]">${Math.round(monto)}</td>
+                      <td className="px-4 py-3 font-mono text-[#e2e8f0]">
+                        ${Math.round(monto)}
+                        {d?.totalsDesactualizados && (
+                          <span
+                            className="ml-1 text-amber-400"
+                            title="Totales desactualizados: un viaje se corrigió después del cierre"
+                          >
+                            ⚠
+                          </span>
+                        )}
+                      </td>
                       <td className="px-4 py-3">
                         <span className={`
                           inline-flex items-center gap-1 text-[10px] px-2.5 py-1 rounded-full border
@@ -452,7 +472,17 @@ export default function JornadasPage() {
           onClose={cerrarModal}
           parseJornadaData={parseJornadaData}
           esSuperAdmin={esSuperAdmin}
-          onEditar={handleEditarJornada}
+          onEditarViaje={setViajeAEditar}
+        />
+      )}
+
+      {viajeAEditar && selectedJornada && (
+        <ModalEditarViaje
+          orderNumber={selectedJornada.order_number}
+          fechaJornada={selectedJornada.fecha || parseJornadaData(selectedJornada).date || ''}
+          viaje={viajeAEditar}
+          onClose={() => setViajeAEditar(null)}
+          onEditado={despuesDeEditarViaje}
         />
       )}
 
