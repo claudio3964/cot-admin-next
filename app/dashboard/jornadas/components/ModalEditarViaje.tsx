@@ -31,12 +31,16 @@ export default function ModalEditarViaje({ orderNumber, fechaJornada, viaje, onC
 
   // E solo puede pasar a F (E->C prohibido, D2); F/C arrancan en su propio estado.
   const [estado, setEstado] = useState<Estado>(esEnCurso ? 'finalizado' : (statusActual as Estado))
-  const ini0 = inicial(viaje.inicioReal ?? viaje.inicioProgramado, fechaJornada)
+  // Sin inicioReal cargado (null, 0 o vacío) se sugiere el horario programado, marcado
+  // como tal: el admin tiene que confirmarlo o cambiarlo.
+  const iniSugeridoMs = tiempoMs(viaje.inicioReal) === null ? tiempoMs(viaje.inicioProgramado) : null
+  const ini0 = inicial(iniSugeridoMs ?? viaje.inicioReal, fechaJornada)
   const fin0 = inicial(viaje.finReal, fechaJornada)
   const [iniFecha, setIniFecha] = useState(ini0.fecha)
   const [iniHora, setIniHora] = useState(ini0.hora)
   const [finFecha, setFinFecha] = useState(fin0.fecha)
   const [finHora, setFinHora] = useState(fin0.hora)
+  const [sugeridoConfirmado, setSugeridoConfirmado] = useState(false)
   const [motivo, setMotivo] = useState('')
   const [guardando, setGuardando] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -59,8 +63,11 @@ export default function ModalEditarViaje({ orderNumber, fechaJornada, viaje, onC
     if (iniNuevo === null || finNuevo === null) aviso = 'Un viaje finalizado necesita inicio y fin reales.'
     else if (finNuevo <= iniNuevo) aviso = 'El fin tiene que ser posterior al inicio.'
   }
+  // El inicio sigue siendo el sugerido (no lo tocaron) y se va a mandar: pide confirmación explícita.
+  const usaSugerido = iniSugeridoMs !== null && iniNuevo === iniSugeridoMs && pInicio !== null
   const motivoOk = motivo.trim().length >= MOTIVO_MIN
   const puedeGuardar = hayCambios && motivoOk && aviso === null && !guardando
+    && (!usaSugerido || sugeridoConfirmado)
 
   const guardar = async () => {
     // El admin lo resuelve la RPC desde el JWT de la sesión; no se manda en el body.
@@ -159,11 +166,32 @@ export default function ModalEditarViaje({ orderNumber, fechaJornada, viaje, onC
             <div className="space-y-3">
               <div className="text-xs font-medium text-[#cbd5e1] uppercase tracking-wider">Horarios reales (hora Uruguay)</div>
               <div>
-                <div className="text-xs text-[#94a3b8] mb-1">Inicio</div>
-                <div className="flex gap-2">
-                  <input type="date" value={iniFecha} onChange={e => setIniFecha(e.target.value)} className={inputCls} />
-                  <input type="time" value={iniHora} onChange={e => setIniHora(e.target.value)} className={inputCls} />
+                <div className="text-xs text-[#94a3b8] mb-1">
+                  Inicio
+                  {usaSugerido && (
+                    <span className="ml-2 text-[10px] px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-400">
+                      sugerido (horario programado)
+                    </span>
+                  )}
                 </div>
+                <div className="flex gap-2">
+                  <input type="date" value={iniFecha} onChange={e => setIniFecha(e.target.value)}
+                    className={`${inputCls} ${usaSugerido ? 'border-amber-500/50' : ''}`} />
+                  <input type="time" value={iniHora} onChange={e => setIniHora(e.target.value)}
+                    className={`${inputCls} ${usaSugerido ? 'border-amber-500/50' : ''}`} />
+                </div>
+                {usaSugerido && (
+                  <label className="flex items-start gap-2 mt-2 text-xs text-amber-300 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={sugeridoConfirmado}
+                      onChange={e => setSugeridoConfirmado(e.target.checked)}
+                      className="mt-0.5"
+                    />
+                    El viaje no tiene inicio real cargado. Confirmo que el inicio fue a la hora
+                    programada (o cambialo arriba).
+                  </label>
+                )}
               </div>
               <div>
                 <div className="text-xs text-[#94a3b8] mb-1">Fin</div>
