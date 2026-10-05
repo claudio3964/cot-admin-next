@@ -29,8 +29,6 @@ To learn more about Next.js, take a look at the following resources:
 
 You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
 
-## Deploy on Vercel
+## Deploy
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Manual, a Netlify (`cot-driver-admin`): `npm run build && npm run zip` y arrastrar el `cot-admin-next-out-<fecha>-<sha>.zip` resultante a Deploys — no comprimir `out/` a mano (un zip con entradas de carpeta deja todo `/_next/` en 404); un push no publica nada.

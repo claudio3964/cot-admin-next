@@ -40,3 +40,4 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 panel-next.zip
+cot-admin-next-out*.zip
