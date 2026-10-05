@@ -19,6 +19,7 @@ import {
   AlertOctagon
 } from 'lucide-react'
 import ModalEditarAsignacion from './components/ModalEditarAsignacion'
+import ModalAnularAsignacion from './components/ModalAnularAsignacion'
 import { buscarJornadasDelChofer, type GuardiaRaw } from '@/lib/jornadas'
 
 const SB_URL = 'https://frjeivfpldcigklwepqt.supabase.co'
@@ -127,6 +128,7 @@ export default function MensajesPage() {
 
   const [enviando, setEnviando] = useState(false)
   const [editando, setEditando] = useState<Mensaje | null>(null)
+  const [anulandoAsignacion, setAnulandoAsignacion] = useState<Mensaje | null>(null)
   const [advertenciaContinuidad, setAdvertenciaContinuidad] = useState<string | null>(null)
   const [confirmarPeseAContinuidad, setConfirmarPeseAContinuidad] = useState(false)
   const [jornadaColgada, setJornadaColgada] = useState<{ orderNumber: string; fecha: string } | null>(null)
@@ -422,50 +424,11 @@ export default function MensajesPage() {
     }
   }
 
-  const anularAsignacion = async (id: number) => {
-    if (!confirm('¿Anular esta asignación? El chofer recibirá un aviso.')) return
-    const token = getToken()
-    if (!token) return
-    const msgOriginal = mensajes.find(m => m.id === id)
-    if (!msgOriginal) return
-    const dataOriginal = (() => {
-      if (typeof msgOriginal.data === 'string') { try { return JSON.parse(msgOriginal.data) } catch { return {} } }
-      return msgOriginal.data || {}
-    })()
-    const viajeId: string | undefined = dataOriginal.viajeId
-    try {
-      await fetch(`${SB_URL}/rest/v1/mensajes?id=eq.${id}`, {
-        method: 'PATCH',
-        headers: { apikey: SB_KEY, Authorization: `Bearer ${token}`, 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
-        body: JSON.stringify({
-          leido: true,
-          data: { ...dataOriginal, respuesta: 'anulado', anuladoAt: new Date().toISOString(), anuladoPor: getAdminEmail() }
-        })
-      })
-      if (viajeId) {
-        await fetch(`${SB_URL}/rest/v1/mensajes`, {
-          method: 'POST',
-          headers: { apikey: SB_KEY, Authorization: `Bearer ${token}`, 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
-          body: JSON.stringify({
-            empresa_id: 'cot', de: 'admin', para: msgOriginal.para, tipo: 'cancelar_viaje',
-            texto: '🚫 Una asignación de viaje fue anulada por tránsito.', data: { viajeId }, leido: false
-          })
-        })
-      } else {
-        await fetch(`${SB_URL}/rest/v1/mensajes`, {
-          method: 'POST',
-          headers: { apikey: SB_KEY, Authorization: `Bearer ${token}`, 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
-          body: JSON.stringify({
-            empresa_id: 'cot', de: 'admin', para: msgOriginal.para, tipo: 'urgente',
-            texto: '🚫 Una asignación de viaje fue anulada por tránsito. Consultá con tu despachador.', leido: false
-          })
-        })
-      }
-      cargarMensajes()
-    } catch (error) {
-      console.error('Error anulando asignación:', error)
-      alert('❌ Error al anular')
-    }
+  // Anular asignación: lo resuelve ModalAnularAsignacion (anular_viaje_panel si el viaje ya
+  // existe en el servidor; si no, solo el mensaje).
+  const anularAsignacion = (id: number) => {
+    const msg = mensajes.find(m => m.id === id)
+    if (msg) setAnulandoAsignacion(msg)
   }
 
   const anularGuardia = async (id: number) => {
@@ -1025,6 +988,13 @@ export default function MensajesPage() {
           mensaje={editando}
           onClose={() => setEditando(null)}
           onGuardado={cargarMensajes}
+        />
+      )}
+      {anulandoAsignacion && (
+        <ModalAnularAsignacion
+          mensaje={anulandoAsignacion}
+          onClose={() => setAnulandoAsignacion(null)}
+          onAnulado={() => { setAnulandoAsignacion(null); cargarMensajes() }}
         />
       )}
     </div>
