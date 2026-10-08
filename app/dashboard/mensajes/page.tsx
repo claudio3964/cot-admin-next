@@ -122,9 +122,12 @@ function BadgeAnulacion({ estado }: { estado: EstadoAnulacion }) {
         </div>
       )
     case 'leido_sin_confirmar':
+      // Lo deja un rechazo permanente de la confirmación (400/404/409, el celu guarda el
+      // rastro) o un APK anterior al paso 4: no se sabe qué pasó en el celu.
       return (
-        <div className={`${base} bg-[#64748b]/10 text-[#94a3b8]`}>
-          El celular la leyó sin confirmar (APK anterior o confirmación rechazada)
+        <div className={`${base} bg-[#f59e0b]/10 text-[#f59e0b] font-semibold`}>
+          <AlertTriangle className="w-3 h-3" />
+          Leído sin confirmación del celu, revisar
         </div>
       )
     case 'confirmado':
