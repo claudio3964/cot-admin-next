@@ -21,6 +21,11 @@ import {
 import ModalEditarAsignacion from './components/ModalEditarAsignacion'
 import ModalAnularAsignacion from './components/ModalAnularAsignacion'
 import { buscarJornadasDelChofer, type GuardiaRaw } from '@/lib/jornadas'
+import {
+  parsearData, estadoAnulacion, idMensajeCancelacion, RESULTADO_CELULAR,
+  type EstadoAnulacion, type MensajeCancelacion
+} from '@/lib/anulacion'
+import { msAFechaHoraUy } from '@/lib/horaUy'
 
 const SB_URL = 'https://frjeivfpldcigklwepqt.supabase.co'
 const SB_KEY = 'sb_publishable_6A7tufjD-rTAUAPfxyziyw_3kXMumzJ'
@@ -99,6 +104,49 @@ const getToken = () => sessionStorage.getItem('admin_token')
 const getAdminRol = () => sessionStorage.getItem('admin_rol')
 const getAdminEmail = () => sessionStorage.getItem('admin_email')
 
+// Seguimiento de una anulación (bug 1 3b.2, paso 4 H): qué pasó en el celular con el
+// cancelar_viaje que mandó anular_asignacion_panel.
+function BadgeAnulacion({ estado }: { estado: EstadoAnulacion }) {
+  const base = 'mt-2 text-[11px] inline-flex items-center gap-1 px-2 py-0.5 rounded-full'
+  const hora = (at: number | null) => (at ? ` ${msAFechaHoraUy(at).hora}` : '')
+  switch (estado.tipo) {
+    case 'sin_seguimiento':
+      return null
+    case 'desconocido':
+      return <div className={`${base} bg-[#64748b]/10 text-[#94a3b8]`}>Seguimiento no disponible</div>
+    case 'pendiente':
+      return (
+        <div className={`${base} bg-[#f59e0b]/10 text-[#f59e0b] font-semibold`}>
+          <Clock className="w-3 h-3" />
+          Anulación pendiente: el celular todavía no la tomó
+        </div>
+      )
+    case 'leido_sin_confirmar':
+      return (
+        <div className={`${base} bg-[#64748b]/10 text-[#94a3b8]`}>
+          El celular la leyó sin confirmar (APK anterior o confirmación rechazada)
+        </div>
+      )
+    case 'confirmado':
+      if (estado.nivel === 'revision') {
+        return (
+          <div className="mt-2 text-xs font-bold flex items-center gap-2 px-3 py-2 rounded-lg bg-[#ef4444]/15 text-[#fca5a5] border border-[#ef4444]/40">
+            <AlertOctagon className="w-4 h-4 shrink-0" />
+            Anulación sobre viaje en curso, requiere revisión de Tránsito{estado.at ? ` (confirmado${hora(estado.at)})` : ''}
+          </div>
+        )
+      }
+      return (
+        <div className={`${base} font-semibold ${estado.nivel === 'atencion'
+          ? 'bg-[#f59e0b]/10 text-[#f59e0b]'
+          : 'bg-[#10b981]/10 text-[#10b981]'}`}>
+          <CheckCircle2 className="w-3 h-3" />
+          Confirmado en el celular{hora(estado.at)}: {RESULTADO_CELULAR[estado.resultado] || estado.resultado}
+        </div>
+      )
+  }
+}
+
 export default function MensajesPage() {
   const router = useRouter()
   const [mensajes, setMensajes] = useState<Mensaje[]>([])
@@ -132,6 +180,8 @@ export default function MensajesPage() {
   const [advertenciaContinuidad, setAdvertenciaContinuidad] = useState<string | null>(null)
   const [confirmarPeseAContinuidad, setConfirmarPeseAContinuidad] = useState(false)
   const [jornadaColgada, setJornadaColgada] = useState<{ orderNumber: string; fecha: string } | null>(null)
+  // cancelar_viaje de asignaciones anuladas que quedaron fuera de los últimos 100 mensajes.
+  const [cancelacionesExtra, setCancelacionesExtra] = useState<Record<number, MensajeCancelacion>>({})
 
   const cargarMensajes = async () => {
     const token = getToken()
@@ -142,8 +192,24 @@ export default function MensajesPage() {
         `${SB_URL}/rest/v1/mensajes?empresa_id=eq.cot&select=*&order=creado_at.desc&limit=100`,
         { headers }
       )
-      const data = await res.json()
-      setMensajes(data || [])
+      const data: Mensaje[] = (await res.json()) || []
+      setMensajes(data)
+
+      const cargados = new Set(data.map(m => m.id))
+      const faltan = data
+        .filter(m => m.tipo === 'asignacion' && !m.cerrado)
+        .map(m => idMensajeCancelacion(parsearData(m.data)))
+        .filter((id): id is number => id !== null && !cargados.has(id))
+      if (faltan.length > 0) {
+        const resExtra = await fetch(
+          `${SB_URL}/rest/v1/mensajes?id=in.(${faltan.join(',')})&select=id,leido,data`,
+          { headers }
+        )
+        if (resExtra.ok) {
+          const extra = (await resExtra.json()) as Array<{ id: number; leido: boolean; data?: unknown }>
+          setCancelacionesExtra(Object.fromEntries(extra.map(m => [m.id, { leido: m.leido, data: m.data }])))
+        }
+      }
     } catch (error) {
       console.error('Error cargando mensajes:', error)
     } finally {
@@ -424,8 +490,8 @@ export default function MensajesPage() {
     }
   }
 
-  // Anular asignación: lo resuelve ModalAnularAsignacion (anular_viaje_panel si el viaje ya
-  // existe en el servidor; si no, solo el mensaje).
+  // Anular asignación: lo resuelve ModalAnularAsignacion con anular_asignacion_panel (el
+  // servidor busca el viaje, anula y avisa al celular; paso 4 H).
   const anularAsignacion = (id: number) => {
     const msg = mensajes.find(m => m.id === id)
     if (msg) setAnulandoAsignacion(msg)
@@ -522,6 +588,18 @@ export default function MensajesPage() {
   const mensajesFiltrados = filtrarMensajes()
   const noLeidos = mensajes.filter(m => !m.leido).length
   const isSuperAdmin = getAdminRol() === 'superadmin'
+
+  // Estado de la anulación de cada asignación anulada (por el cancelar_viaje enlazado).
+  const porId = new Map<number, MensajeCancelacion>(mensajes.map(m => [m.id, m]))
+  const estadoDeAsignacion = (data: Record<string, unknown>): EstadoAnulacion => {
+    const id = idMensajeCancelacion(data)
+    return estadoAnulacion(data, id === null ? null : (porId.get(id) ?? cancelacionesExtra[id]))
+  }
+  const enRevision = mensajes.filter(m => {
+    if (m.tipo !== 'asignacion' || m.cerrado) return false
+    const e = estadoDeAsignacion(parsearData(m.data))
+    return e.tipo === 'confirmado' && e.nivel === 'revision'
+  }).length
 
   return (
     <div className={`
@@ -822,6 +900,15 @@ export default function MensajesPage() {
           </div>
         </div>
 
+        {enRevision > 0 && (
+          <div className="px-5 py-3 bg-[#ef4444]/15 border-b border-[#ef4444]/40 text-sm font-bold text-[#fca5a5] flex items-center gap-2">
+            <AlertOctagon className="w-5 h-5 shrink-0" />
+            {enRevision === 1
+              ? '1 anulación sobre viaje en curso requiere revisión de Tránsito'
+              : `${enRevision} anulaciones sobre viaje en curso requieren revisión de Tránsito`}
+          </div>
+        )}
+
         <div className="divide-y divide-white/[0.04]">
           {mensajesFiltrados.length === 0 ? (
             <div className="px-4 py-12 text-center text-[#475569]">
@@ -836,6 +923,7 @@ export default function MensajesPage() {
                 asignacion: { label: 'Asignación', color: 'text-[#10b981] bg-[#10b981]/10 border-[#10b981]/20', icon: Bus },
                 urgente: { label: 'Urgente', color: 'text-[#ef4444] bg-[#ef4444]/10 border-[#ef4444]/20', icon: AlertTriangle },
                 guardia: { label: 'Guardia', color: 'text-[#f59e0b] bg-[#f59e0b]/10 border-[#f59e0b]/20', icon: Shield },
+                cancelar_viaje: { label: 'Anulación', color: 'text-[#f87171] bg-[#ef4444]/10 border-[#ef4444]/20', icon: XCircle },
                 mensaje: { label: 'Mensaje', color: 'text-[#3b82f6] bg-[#3b82f6]/10 border-[#3b82f6]/20', icon: MessageSquare }
               }
               const tc = tipoConfig[msg.tipo as keyof typeof tipoConfig] || tipoConfig.mensaje
@@ -875,6 +963,10 @@ export default function MensajesPage() {
 
                   {msg.texto && (
                     <div className="text-sm text-[#e2e8f0] mb-1">{msg.texto}</div>
+                  )}
+
+                  {msg.tipo === 'cancelar_viaje' && (
+                    <BadgeAnulacion estado={estadoAnulacion({ mensajeCancelacionId: msg.id }, msg)} />
                   )}
 
                   {viajeData && (
@@ -930,6 +1022,11 @@ export default function MensajesPage() {
                           {respuesta === 'aceptado' ? 'Aceptado' :
                            respuesta === 'anulado' ? 'Anulado' :
                            'Rechazado'}
+                        </div>
+                      )}
+                      {msg.tipo === 'asignacion' && respuesta === 'anulado' && (
+                        <div>
+                          <BadgeAnulacion estado={estadoDeAsignacion(parsearData(msg.data))} />
                         </div>
                       )}
                       {!respuesta && (msg.tipo === 'asignacion' || msg.tipo === 'guardia') && (
