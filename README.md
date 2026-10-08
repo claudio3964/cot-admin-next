@@ -31,4 +31,6 @@ You can check out [the Next.js GitHub repository](https://github.com/vercel/next
 
 ## Deploy
 
+**Único panel admin en producción:** https://cot-driver-admin.netlify.app (el panel JS viejo se retiró el 08/10/2026).
+
 Manual, a Netlify (`cot-driver-admin`): `npm run build && npm run zip` y arrastrar el `cot-admin-next-out-<fecha>-<sha>.zip` resultante a Deploys — no comprimir `out/` a mano (un zip con entradas de carpeta deja todo `/_next/` en 404); un push no publica nada.
