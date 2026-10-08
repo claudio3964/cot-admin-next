@@ -36,7 +36,10 @@ export type EstadoAnulacion =
   | { tipo: 'desconocido' }
   /** El celular todavía no tomó el cancelar_viaje. */
   | { tipo: 'pendiente' }
-  /** Leído sin confirmación: APK anterior al paso 4, o la confirmación fue rechazada. */
+  /**
+   * Leído sin confirmación: la confirmación fue rechazada de forma permanente (400/404/409; el
+   * celu la guarda como "rechazada") o APK anterior al paso 4. Ámbar, "revisar".
+   */
   | { tipo: 'leido_sin_confirmar' }
   | { tipo: 'confirmado'; resultado: string; at: number | null; nivel: 'ok' | 'atencion' | 'revision' }
 
