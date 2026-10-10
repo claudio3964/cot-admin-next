@@ -212,6 +212,7 @@ export default function ModalDetalle({
                       <th className="px-3 py-2 text-left text-[#cbd5e1] text-xs">Horas</th>
                       <th className="px-3 py-2 text-left text-[#cbd5e1] text-xs">Km</th>
                       <th className="px-3 py-2 text-left text-[#cbd5e1] text-xs">Tipo</th>
+                      <th className="px-3 py-2 text-left text-[#cbd5e1] text-xs">Estado</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -222,6 +223,16 @@ export default function ModalDetalle({
                         <td className="px-3 py-2 font-mono text-[#e2e8f0]">{Number(g.hours || 0).toFixed(2)} h</td>
                         <td className="px-3 py-2 font-mono text-[#e2e8f0]">{Number(g.kmGuardia || 0).toFixed(1)} km</td>
                         <td className="px-3 py-2 text-[#e2e8f0]">{g.type || '—'}</td>
+                        <td className={`px-3 py-2 text-xs ${
+                          g.status === 'programada' ? 'text-[#f59e0b]' :
+                          g.status === 'en_curso' ? 'text-[#60a5fa]' :
+                          g.status === 'cancelado' ? 'text-[#f87171]' : 'text-[#94a3b8]'
+                        }`}>
+                          {g.status === 'programada' ? 'Programada' :
+                           g.status === 'en_curso' ? 'En curso' :
+                           g.status === 'cancelado' ? 'Anulada' :
+                           g.status === 'finalizada' ? 'Finalizada' : (g.status || '—')}
+                        </td>
                       </tr>
                     ))}
                   </tbody>

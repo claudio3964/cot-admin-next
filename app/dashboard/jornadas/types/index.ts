@@ -27,6 +27,9 @@ export interface Guardia {
   type?: string
   cortadaAuto?: boolean
   viatico?: boolean
+  // programada | en_curso | finalizada | cancelado
+  status?: string
+  inicioMs?: number
 }
 
 export interface JornadaData {

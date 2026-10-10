@@ -14,6 +14,9 @@ export interface GuardiaRaw {
   inicio?: string
   type?: string
   status?: string
+  // Fase B de "guardia programada": inicio con fecha (epoch ms) y asignación de origen.
+  inicioMs?: number
+  asignacionId?: number | string
 }
 
 function parseData(raw: unknown): Record<string, any> {

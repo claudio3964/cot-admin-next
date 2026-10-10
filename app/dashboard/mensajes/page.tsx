@@ -20,7 +20,11 @@ import {
 } from 'lucide-react'
 import ModalEditarAsignacion from './components/ModalEditarAsignacion'
 import ModalAnularAsignacion from './components/ModalAnularAsignacion'
-import { buscarJornadasDelChofer, type GuardiaRaw } from '@/lib/jornadas'
+import ModalAnularGuardia from './components/ModalAnularGuardia'
+import {
+  bloqueoParaAsignarGuardia, textoBloqueoAsignacion, inicioMsDeGuardia, formatearInicioGuardia,
+  RESULTADO_ANULACION_GUARDIA, type DiaGuardia
+} from '@/lib/guardias'
 import {
   parsearData, estadoAnulacion, idMensajeCancelacion, RESULTADO_CELULAR,
   type EstadoAnulacion, type MensajeCancelacion
@@ -176,10 +180,14 @@ export default function MensajesPage() {
 
   const [guardiaHoraInicio, setGuardiaHoraInicio] = useState('')
   const [guardiaTipo, setGuardiaTipo] = useState('comun')
+  // Día de la guardia: obligatorio, sin valor por defecto. Con él se arma inicioMs (la hora
+  // sola no alcanza: una guardia asignada 23:50 para las 00:30 es de mañana).
+  const [guardiaDia, setGuardiaDia] = useState<DiaGuardia | ''>('')
 
   const [enviando, setEnviando] = useState(false)
   const [editando, setEditando] = useState<Mensaje | null>(null)
   const [anulandoAsignacion, setAnulandoAsignacion] = useState<Mensaje | null>(null)
+  const [anulandoGuardia, setAnulandoGuardia] = useState<Mensaje | null>(null)
   const [advertenciaContinuidad, setAdvertenciaContinuidad] = useState<string | null>(null)
   const [confirmarPeseAContinuidad, setConfirmarPeseAContinuidad] = useState(false)
   const [jornadaColgada, setJornadaColgada] = useState<{ orderNumber: string; fecha: string } | null>(null)
@@ -254,7 +262,7 @@ export default function MensajesPage() {
       setAsigOrigen(''); setAsigOrigenInput(''); setAsigDestino(''); setAsigDestinoInput('')
       setAsigHoraSalida(''); setAsigHoraLlegada(''); setAsigTipoServicio('TURNO'); setAsigCoche(''); setAsigKm(null)
     }
-    if (tipo !== 'guardia') { setGuardiaHoraInicio(''); setGuardiaTipo('comun') }
+    if (tipo !== 'guardia') { setGuardiaHoraInicio(''); setGuardiaTipo('comun'); setGuardiaDia('') }
   }
 
   useEffect(() => { toggleCamposAsignacion() }, [tipo])
@@ -323,6 +331,7 @@ export default function MensajesPage() {
     }
 
     if (tipo === 'asignacion' && para === 'todos') { alert('⚠️ Las asignaciones deben ir a un chofer específico'); return }
+    if (tipo === 'guardia' && para === 'todos') { alert('⚠️ Las guardias deben ir a un chofer específico'); return }
     if (tipo !== 'asignacion' && tipo !== 'guardia' && !texto.trim()) { alert('⚠️ Escribí un mensaje'); return }
 
     let dataViaje: ViajeData | null = null
@@ -374,13 +383,33 @@ export default function MensajesPage() {
     let dataGuardia = null
     if (tipo === 'guardia') {
       if (!guardiaHoraInicio) { alert('⚠️ Ingresá la hora de inicio'); return }
-      dataGuardia = { guardia: { horaInicio: guardiaHoraInicio, tipo: guardiaTipo } }
+      if (!guardiaDia) { alert('⚠️ Elegí si la guardia es para hoy o para mañana'); return }
+      const inicioMs = inicioMsDeGuardia(guardiaDia, guardiaHoraInicio)
+      if (inicioMs === null) { alert('⚠️ Hora de inicio inválida'); return }
+
+      // Máximo una guardia viva por chofer (programada o en curso), contando también una
+      // asignación que el celular todavía no tomó. Si no se puede verificar, no se asigna.
+      try {
+        const bloqueo = await bloqueoParaAsignarGuardia(para, token)
+        if (bloqueo) { alert('⚠️ ' + textoBloqueoAsignacion(bloqueo)); return }
+      } catch {
+        alert('⚠️ No se pudo verificar si el chofer ya tiene una guardia. Reintentá en un momento.')
+        return
+      }
+
+      // Hora de hoy ya pasada: la guardia nace en curso y cuenta desde esa hora.
+      if (inicioMs < Date.now() - 60_000 &&
+          !confirm(`Las ${guardiaHoraInicio} de hoy ya pasaron: la guardia nace EN CURSO y cuenta (y se paga) desde las ${guardiaHoraInicio}. ¿Confirmás?`)) {
+        return
+      }
+
+      dataGuardia = { guardia: { horaInicio: guardiaHoraInicio, tipo: guardiaTipo, inicioMs } }
     }
 
     const textoFinal = texto.trim() || (tipo === 'asignacion'
       ? `Asignación de viaje: ${asigOrigen} → ${asigDestino} a las ${asigHoraSalida}`
       : tipo === 'guardia'
-      ? `Asignación de guardia ${guardiaTipo === 'especial' ? 'especial' : 'común'} a las ${guardiaHoraInicio}`
+      ? `Asignación de guardia ${guardiaTipo === 'especial' ? 'especial' : 'común'} ${guardiaDia === 'manana' ? 'para mañana' : 'para hoy'} a las ${guardiaHoraInicio}`
       : '')
 
     setEnviando(true)
@@ -458,7 +487,7 @@ export default function MensajesPage() {
         setAsigOrigen(''); setAsigOrigenInput(''); setAsigDestino(''); setAsigDestinoInput('')
         setAsigKm(null); setAsigHoraSalida(''); setAsigHoraLlegada(''); setAsigCoche('')
       }
-      if (tipo === 'guardia') { setGuardiaHoraInicio(''); setGuardiaTipo('comun') }
+      if (tipo === 'guardia') { setGuardiaHoraInicio(''); setGuardiaTipo('comun'); setGuardiaDia('') }
       setAdvertenciaContinuidad(null)
       setConfirmarPeseAContinuidad(false)
 
@@ -500,71 +529,11 @@ export default function MensajesPage() {
     if (msg) setAnulandoAsignacion(msg)
   }
 
-  const anularGuardia = async (id: number) => {
-    if (!confirm('¿Anular esta guardia? El chofer recibirá un aviso.')) return
-    const token = getToken()
-    if (!token) return
-    const msgOriginal = mensajes.find(m => m.id === id)
-    if (!msgOriginal) return
-    const dataOriginal = (() => {
-      if (typeof msgOriginal.data === 'string') { try { return JSON.parse(msgOriginal.data) } catch { return {} } }
-      return msgOriginal.data || {}
-    })()
-    const guardiaId: string | undefined = dataOriginal.guardiaId
-    try {
-      if (msgOriginal.leido) {
-        if (!guardiaId) { alert('No se puede anular: guardia sin vincular. Contactá con soporte.'); return }
-        const jornadas = await buscarJornadasDelChofer(msgOriginal.para, token)
-        let guardiaEncontrada: GuardiaRaw | null = null
-        for (const j of jornadas) {
-          const guards: GuardiaRaw[] = j.data?.guards || []
-          const found = guards.find(g => g.id === guardiaId)
-          if (found) { guardiaEncontrada = found; break }
-        }
-        if (!guardiaEncontrada) { alert('No se encontró la guardia en la jornada del chofer.'); return }
-        if (guardiaEncontrada.status !== 'en_curso') {
-          alert(`Solo se pueden anular guardias en curso; esta ya está ${guardiaEncontrada.status}.`)
-          return
-        }
-        await fetch(`${SB_URL}/rest/v1/mensajes?id=eq.${id}`, {
-          method: 'PATCH',
-          headers: { apikey: SB_KEY, Authorization: `Bearer ${token}`, 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
-          body: JSON.stringify({
-            leido: true,
-            data: { ...dataOriginal, respuesta: 'anulado', anuladoAt: new Date().toISOString(), anuladoPor: getAdminEmail() }
-          })
-        })
-        await fetch(`${SB_URL}/rest/v1/mensajes`, {
-          method: 'POST',
-          headers: { apikey: SB_KEY, Authorization: `Bearer ${token}`, 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
-          body: JSON.stringify({
-            empresa_id: 'cot', de: 'admin', para: msgOriginal.para, tipo: 'cancelar_guardia',
-            texto: '🚫 Una guardia fue anulada por tránsito.', data: { guardiaId }, leido: false
-          })
-        })
-      } else {
-        await fetch(`${SB_URL}/rest/v1/mensajes?id=eq.${id}`, {
-          method: 'PATCH',
-          headers: { apikey: SB_KEY, Authorization: `Bearer ${token}`, 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
-          body: JSON.stringify({
-            leido: true,
-            data: { ...dataOriginal, respuesta: 'anulado', anuladoAt: new Date().toISOString(), anuladoPor: getAdminEmail() }
-          })
-        })
-        await fetch(`${SB_URL}/rest/v1/mensajes`, {
-          method: 'POST',
-          headers: { apikey: SB_KEY, Authorization: `Bearer ${token}`, 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
-          body: JSON.stringify({
-            empresa_id: 'cot', de: 'admin', para: msgOriginal.para, tipo: 'urgente',
-            texto: '🚫 Una guardia fue anulada por tránsito. Consultá con tu despachador.', leido: false
-          })
-        })
-      }
-      cargarMensajes()
-    } catch (error) {
-      console.error('Error anulando guardia:', error)
-      alert('❌ Error al anular')
-    }
+  // Anular guardia: lo resuelve ModalAnularGuardia con anular_guardia_panel (el servidor
+  // busca la guardia -- programada o en curso --, la cancela, audita y avisa al celular).
+  const anularGuardia = (id: number) => {
+    const msg = mensajes.find(m => m.id === id)
+    if (msg) setAnulandoGuardia(msg)
   }
 
   const filtrarMensajes = () => {
@@ -777,6 +746,26 @@ export default function MensajesPage() {
               <Shield className="w-3.5 h-3.5" />
               Datos de la guardia
             </div>
+            <div className="mb-3">
+              <label className="block text-[11px] text-[#94a3b8] mb-1">Día</label>
+              <div className="flex gap-2">
+                {(['hoy', 'manana'] as const).map(d => (
+                  <button
+                    key={d}
+                    type="button"
+                    onClick={() => setGuardiaDia(d)}
+                    className={`px-4 py-2 rounded-lg text-sm font-medium border transition ${guardiaDia === d
+                      ? 'bg-[#f59e0b] text-[#0f172a] border-[#f59e0b]'
+                      : 'bg-[#0f172a]/60 text-[#94a3b8] border-[#1e293b] hover:border-[#f59e0b]/50'}`}
+                  >
+                    {d === 'hoy' ? 'Hoy' : 'Mañana'}
+                  </button>
+                ))}
+              </div>
+              {!guardiaDia && (
+                <div className="text-[11px] text-[#f59e0b] mt-1">Obligatorio: elegí el día de la guardia.</div>
+              )}
+            </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               <div>
                 <label className="block text-[11px] text-[#94a3b8] mb-1">Hora inicio</label>
@@ -927,6 +916,7 @@ export default function MensajesPage() {
                 urgente: { label: 'Urgente', color: 'text-[#ef4444] bg-[#ef4444]/10 border-[#ef4444]/20', icon: AlertTriangle },
                 guardia: { label: 'Guardia', color: 'text-[#f59e0b] bg-[#f59e0b]/10 border-[#f59e0b]/20', icon: Shield },
                 cancelar_viaje: { label: 'Anulación', color: 'text-[#f87171] bg-[#ef4444]/10 border-[#ef4444]/20', icon: XCircle },
+                cancelar_guardia: { label: 'Anulación', color: 'text-[#f87171] bg-[#ef4444]/10 border-[#ef4444]/20', icon: XCircle },
                 mensaje: { label: 'Mensaje', color: 'text-[#3b82f6] bg-[#3b82f6]/10 border-[#3b82f6]/20', icon: MessageSquare }
               }
               const tc = tipoConfig[msg.tipo as keyof typeof tipoConfig] || tipoConfig.mensaje
@@ -1005,7 +995,9 @@ export default function MensajesPage() {
                       {viajeData.horaInicio && (
                         <div className="flex items-center gap-2 text-[#94a3b8] text-[11px]">
                           <Shield className="w-3.5 h-3.5 text-[#f59e0b]" />
-                          Guardia a las <span className="text-white">{viajeData.horaInicio}</span>
+                          Guardia a las <span className="text-white">
+                            {typeof viajeData.inicioMs === 'number' ? formatearInicioGuardia(viajeData.inicioMs) : viajeData.horaInicio}
+                          </span>
                           {viajeData.tipo && (
                             <span className="ml-1">
                               ({viajeData.tipo === 'especial' ? 'Especial' : 'Común'})
@@ -1032,6 +1024,17 @@ export default function MensajesPage() {
                           <BadgeAnulacion estado={estadoDeAsignacion(parsearData(msg.data))} />
                         </div>
                       )}
+                      {msg.tipo === 'guardia' && respuesta === 'anulado' && (() => {
+                        const d = parsearData(msg.data)
+                        const resultado = typeof d.anulacionResultado === 'string' ? d.anulacionResultado : null
+                        if (!resultado) return null
+                        return (
+                          <div className="mt-1 text-[11px] text-[#94a3b8]">
+                            {RESULTADO_ANULACION_GUARDIA[resultado] || resultado}
+                            {typeof d.anuladoMotivo === 'string' && d.anuladoMotivo ? ` Motivo: ${d.anuladoMotivo}` : ''}
+                          </div>
+                        )
+                      })()}
                       {!respuesta && (msg.tipo === 'asignacion' || msg.tipo === 'guardia') && (
                         <div className="mt-2 text-[11px] text-[#f59e0b] flex items-center gap-1">
                           <Clock className="w-3 h-3" />
@@ -1088,6 +1091,13 @@ export default function MensajesPage() {
           mensaje={editando}
           onClose={() => setEditando(null)}
           onGuardado={cargarMensajes}
+        />
+      )}
+      {anulandoGuardia && (
+        <ModalAnularGuardia
+          mensaje={anulandoGuardia}
+          onClose={() => setAnulandoGuardia(null)}
+          onAnulado={() => { setAnulandoGuardia(null); cargarMensajes() }}
         />
       )}
       {anulandoAsignacion && (

@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { encontrarConflicto, parsearInicioGuardiaMs, type ViajeParaConflicto } from '@/lib/solapamiento'
 import { encontrarUltimoDestino, type ViajeParaContinuidad } from '@/lib/continuidad'
 import { buscarJornadasDelChofer, type GuardiaRaw } from '@/lib/jornadas'
+import { inicioMsEditado, RECHAZOS_EDICION_GUARDIA } from '@/lib/guardias'
 
 const SB_URL = 'https://frjeivfpldcigklwepqt.supabase.co'
 const SB_KEY = 'sb_publishable_6A7tufjD-rTAUAPfxyziyw_3kXMumzJ'
@@ -138,6 +139,9 @@ export default function ModalEditarAsignacion({ mensaje, onClose, onGuardado }: 
   const [tipoGuardia, setTipoGuardia] = useState('comun')
   // Caso B de guardias: id de la guardia real (jornadas.data.guards[]) que se está editando.
   const [guardiaIdEditando, setGuardiaIdEditando] = useState<string | undefined>(undefined)
+  // inicioMs que tiene hoy esa guardia en el servidor (undefined en guardias anteriores a la
+  // fase B de "guardia programada"): la edición conserva la fecha y cambia la hora.
+  const [guardiaInicioMsActual, setGuardiaInicioMsActual] = useState<number | undefined>(undefined)
 
   const [conflicto, setConflicto] = useState<ViajeParaConflicto | null>(null)
   const [confirmarPeseAConflicto, setConfirmarPeseAConflicto] = useState(false)
@@ -168,10 +172,10 @@ export default function ModalEditarAsignacion({ mensaje, onClose, onGuardado }: 
         setEsGuardia(true)
 
         if (!mensaje.leido) {
-          // CASO A: todavía no procesada por el chofer — sin cambios.
-          const g = data.guardia || data
-          setHoraInicioGuardia(g.horaInicio || g.inicio || '')
-          setTipoGuardia(g.tipo || 'comun')
+          // CASO A: todavía no procesada por el chofer. Desde la fase B de "guardia
+          // programada" una guardia asignada no se edita (decisión 10/10): se anula y se
+          // reasigna, cada paso auditado y con su aviso al chofer.
+          setError('Una guardia asignada no se edita: anulala y volvé a asignarla. El chofer recibe los dos avisos.')
           setCargando(false)
           return
         }
@@ -205,6 +209,11 @@ export default function ModalEditarAsignacion({ mensaje, onClose, onGuardado }: 
             return
           }
 
+          if (guardiaEncontrada.status === 'programada') {
+            setError('Una guardia programada no se edita: anulala y volvé a asignarla. El chofer recibe los dos avisos.')
+            setCargando(false)
+            return
+          }
           if (guardiaEncontrada.status !== 'en_curso') {
             setError(`Solo se pueden editar guardias en curso; esta ya está ${guardiaEncontrada.status}.`)
             setCargando(false)
@@ -214,6 +223,10 @@ export default function ModalEditarAsignacion({ mensaje, onClose, onGuardado }: 
           setHoraInicioGuardia(guardiaEncontrada.inicio || '')
           setTipoGuardia(guardiaEncontrada.type || 'comun')
           setGuardiaIdEditando(guardiaId)
+          setGuardiaInicioMsActual(
+            typeof guardiaEncontrada.inicioMs === 'number' && guardiaEncontrada.inicioMs > 0
+              ? guardiaEncontrada.inicioMs : undefined
+          )
 
           const infoMap: Record<string, { origen?: string; destino?: string; departureTime?: string }> = {}
           travelsDeLaJornada.forEach(t => { infoMap[t.id] = { origen: t.origen, destino: t.destino, departureTime: t.departureTime } })
@@ -492,6 +505,16 @@ export default function ModalEditarAsignacion({ mensaje, onClose, onGuardado }: 
       }
     }
 
+    // Inicio con fecha: la misma fecha que tenía la guardia, con la hora nueva. Solo para
+    // guardias que ya tienen inicioMs (las anteriores a la fase B se editan como antes).
+    // Una guardia en curso no se lleva a una hora futura: se cierra y se abre otra.
+    let inicioMs: number | null = null
+    if (guardiaInicioMsActual !== undefined) {
+      inicioMs = inicioMsEditado(guardiaInicioMsActual, horaInicioGuardia)
+      if (inicioMs === null) { alert('⚠️ Hora de inicio inválida'); return }
+      if (inicioMs > Date.now()) { alert('⚠️ ' + RECHAZOS_EDICION_GUARDIA.INICIO_FUTURO); return }
+    }
+
     setGuardando(true)
     try {
       const res = await fetch(`${SB_URL}/rest/v1/rpc/editar_guardia_en_jornada`, {
@@ -499,12 +522,15 @@ export default function ModalEditarAsignacion({ mensaje, onClose, onGuardado }: 
         headers: { apikey: SB_KEY, Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({
           p_guardia_id: guardiaIdEditando,
-          p_inicio: horaInicioGuardia
+          p_inicio: horaInicioGuardia,
+          ...(inicioMs !== null ? { p_inicio_ms: inicioMs } : {})
         })
       })
 
       if (!res.ok) {
-        alert('❌ Error al editar la guardia en la jornada')
+        let code = ''
+        try { code = (await res.json())?.code || '' } catch {}
+        alert('❌ ' + (RECHAZOS_EDICION_GUARDIA[code] || 'Error al editar la guardia en la jornada'))
         setGuardando(false)
         return
       }
@@ -524,7 +550,10 @@ export default function ModalEditarAsignacion({ mensaje, onClose, onGuardado }: 
           tipo: 'editar_guardia',
           texto: 'Tu guardia fue modificada por tránsito.',
           leido: false,
-          data: { guardiaId: guardiaIdEditando, inicio: horaInicioGuardia, tipo: tipoGuardia }
+          data: {
+            guardiaId: guardiaIdEditando, inicio: horaInicioGuardia, tipo: tipoGuardia,
+            ...(inicioMs !== null ? { inicioMs } : {})
+          }
         })
       })
 
