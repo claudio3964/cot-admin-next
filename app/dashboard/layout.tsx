@@ -53,6 +53,11 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     router.push('/login')
   }
 
+  // Configuración (valores del laudo) solo para el superadmin: el servidor también lo exige
+  // (E0, 24/10). sessionStorage solo existe en el cliente, por eso después de montar.
+  const esSuperAdmin = mounted && sessionStorage.getItem('admin_rol') === 'superadmin'
+  const tabsVisibles = tabs.filter(t => t.id !== 'configuracion' || esSuperAdmin)
+
   return (
     <div className="min-h-screen bg-[#0a0e1a]">
       {/* ═══════════════════════════════════════
@@ -96,7 +101,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             TABS HORIZONTALES
             ═══════════════════════════════════════ */}
         <div className="px-6 flex items-center gap-1 overflow-x-auto scrollbar-hide">
-          {tabs.map((tab) => {
+          {tabsVisibles.map((tab) => {
             const isActive = pathname === tab.path
             const Icon = tab.icon
             return (
