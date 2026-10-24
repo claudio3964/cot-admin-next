@@ -88,15 +88,18 @@ export default function ConfiguracionPage() {
     }
 
     setSaving(clave)
+    const etiqueta = LABELS[clave] || clave
 
     try {
-      await fetch(`${SB_URL}/rest/v1/configuracion?clave=eq.${clave}`, {
+      // return=representation: si RLS no deja escribir, PostgREST responde 2xx con 0 filas,
+      // así que el OK se confirma con la fila devuelta, no con el status.
+      const res = await fetch(`${SB_URL}/rest/v1/configuracion?clave=eq.${clave}`, {
         method: 'PATCH',
         headers: {
           apikey: SB_KEY,
           Authorization: `Bearer ${token}`,
           'Content-Type': 'application/json',
-          'Prefer': 'return=minimal'
+          'Prefer': 'return=representation'
         },
         body: JSON.stringify({
           valor: valor,
@@ -104,7 +107,19 @@ export default function ConfiguracionPage() {
         })
       })
 
-      alert(`✅ ${LABELS[clave] || clave} actualizado a ${valor}`)
+      if (!res.ok) {
+        const detalle = await res.text().catch(() => '')
+        alert(`❌ No se guardó ${etiqueta}: el servidor respondió ${res.status}.${detalle ? `\n${detalle}` : ''}`)
+        return
+      }
+      const filas = await res.json().catch(() => null)
+      if (!Array.isArray(filas) || filas.length !== 1) {
+        alert(`❌ No se guardó ${etiqueta}: no tenés permiso para cambiar los valores del laudo (solo el superadmin).`)
+        await cargarConfiguracion()
+        return
+      }
+
+      alert(`✅ ${etiqueta} actualizado a ${filas[0].valor}`)
       await cargarConfiguracion()
     } catch (error) {
       console.error('Error guardando configuración:', error)
@@ -122,8 +137,12 @@ export default function ConfiguracionPage() {
     )
   }
 
+  // Solo el superadmin edita (el servidor también lo exige, E0 24/10). Acá ya se montó: loading
+  // arranca en true, así que el render del servidor nunca llega a esta línea.
+  const esSuperAdmin = sessionStorage.getItem('admin_rol') === 'superadmin'
+
   // Filtrar solo las claves que nos interesan
-  const items = Array.isArray(config) 
+  const items = Array.isArray(config)
   ? config.filter(item => LABELS[item.clave as keyof typeof LABELS])
   : []
   return (
@@ -134,6 +153,9 @@ export default function ConfiguracionPage() {
           <div>
             <h2 className="text-sm font-semibold text-white">Valores del laudo vigente</h2>
             <p className="text-xs text-[#cbd5e1] mt-0.5">Subgrupo 02 Grupo 13</p>
+            {!esSuperAdmin && (
+              <p className="text-xs text-amber-400 mt-1">Solo lectura: solo el superadmin puede cambiar estos valores.</p>
+            )}
           </div>
           <button
             onClick={cargarConfiguracion}
@@ -174,20 +196,25 @@ export default function ConfiguracionPage() {
                         type="number"
                         step="0.0001"
                         defaultValue={item.valor}
-                        className="w-36 bg-[#1c2537] border border-[#1e2d45] rounded-lg px-3 py-2 text-sm text-white font-mono outline-none focus:border-[#3b82f6]"
+                        disabled={!esSuperAdmin}
+                        className="w-36 disabled:opacity-60 bg-[#1c2537] border border-[#1e2d45] rounded-lg px-3 py-2 text-sm text-white font-mono outline-none focus:border-[#3b82f6]"
                       />
                     </td>
                     <td className="px-4 py-3 font-mono text-sm text-[#cbd5e1]">
                       {item.vigencia || '—'}
                     </td>
                     <td className="px-4 py-3 text-center">
-                      <button
-                        onClick={() => guardarConfig(item.clave)}
-                        disabled={saving === item.clave}
-                        className="bg-blue-500/20 border border-blue-500/30 text-blue-400 rounded-md px-4 py-1.5 text-sm font-medium hover:bg-blue-500/30 transition disabled:opacity-50"
-                      >
-                        {saving === item.clave ? '...' : 'Guardar'}
-                      </button>
+                      {esSuperAdmin ? (
+                        <button
+                          onClick={() => guardarConfig(item.clave)}
+                          disabled={saving === item.clave}
+                          className="bg-blue-500/20 border border-blue-500/30 text-blue-400 rounded-md px-4 py-1.5 text-sm font-medium hover:bg-blue-500/30 transition disabled:opacity-50"
+                        >
+                          {saving === item.clave ? '...' : 'Guardar'}
+                        </button>
+                      ) : (
+                        <span className="text-xs text-[#64748b]">—</span>
+                      )}
                     </td>
                   </tr>
                 ))
