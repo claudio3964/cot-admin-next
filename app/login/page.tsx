@@ -24,13 +24,13 @@ export default function LoginPage() {
   }, [])
 
   const triggerLoginError = () => {
-  setLoginError(true)
-  setTimeout(() => setLoginError(false), 600)
-}
+    setLoginError(true)
+    setTimeout(() => setLoginError(false), 600)
+  }
 
-const triggerLoginSuccess = () => {
-  setLoginSuccess(true)
-}
+  const triggerLoginSuccess = () => {
+    setLoginSuccess(true)
+  }
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -65,108 +65,102 @@ const triggerLoginSuccess = () => {
         return
       }
 
-     sessionStorage.setItem('admin_token', data.access_token)
-sessionStorage.setItem('admin_refresh_token', data.refresh_token || '')
-sessionStorage.setItem('admin_email', email)
-sessionStorage.setItem('admin_rol', admins[0].rol)
-sessionStorage.setItem('admin_nombre', admins[0].nombre)
+      sessionStorage.setItem('admin_token', data.access_token)
+      sessionStorage.setItem('admin_refresh_token', data.refresh_token || '')
+      sessionStorage.setItem('admin_email', email)
+      sessionStorage.setItem('admin_rol', admins[0].rol)
+      sessionStorage.setItem('admin_nombre', admins[0].nombre)
 
-triggerLoginSuccess()
+      triggerLoginSuccess()
 
-setTimeout(() => {
-  router.push('/dashboard')
-}, 700)
-} catch (err) {
-  setError('Error de conexión')
-  triggerLoginError()
-  setLoading(false)
-}
+      setTimeout(() => {
+        router.push('/dashboard')
+      }, 700)
+    } catch (err) {
+      setError('Error de conexión')
+      triggerLoginError()
+      setLoading(false)
+    }
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center relative overflow-hidden bg-[#0a0e1a]">
-      {/* FONDO */}
+    <div className="min-h-screen flex items-center justify-center relative overflow-hidden bg-[#0a0c10] text-slate-100 selection:bg-cyan-500/30">
+      
+      {/* Fondo industrial de precisión (Patrón de grilla fina en lugar de orbes borrosos genéricos) */}
       <div className="absolute inset-0 pointer-events-none">
-        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-[#1e3a5f]/40 via-[#0a0e1a] to-[#0a0e1a]" />
         <div 
-          className="absolute inset-0 opacity-[0.03]"
+          className="absolute inset-0 opacity-[0.025]"
           style={{
-            backgroundImage: 'linear-gradient(rgba(59,130,246,0.3) 1px, transparent 1px), linear-gradient(90deg, rgba(59,130,246,0.3) 1px, transparent 1px)',
-            backgroundSize: '60px 60px'
+            backgroundImage: 'linear-gradient(rgba(255,255,255,0.1) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.1) 1px, transparent 1px)',
+            backgroundSize: '40px 40px'
           }} 
         />
-        <div className="absolute top-[-10%] left-[-10%] w-[500px] h-[500px] rounded-full bg-[#3b82f6]/10 blur-[120px] animate-pulse" />
-        <div 
-          className="absolute bottom-[-10%] right-[-10%] w-[400px] h-[400px] rounded-full bg-[#06b6d4]/10 blur-[100px] animate-pulse" 
-          style={{ animationDelay: '2s' }} 
-        />
+        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[600px] h-[250px] bg-gradient-to-b from-blue-600/10 to-transparent blur-[100px]" />
       </div>
 
-      {/* CARD */}
+      {/* Tarjeta con estructura sólida y luz de elevación trasera intensa */}
       <div 
         className={`
-          relative z-10 w-full max-w-[400px] mx-4
-          transition-all duration-700 ease-out
-          ${mounted ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'}
+          relative z-10 w-full max-w-[420px] mx-4
+          transition-all duration-500 ease-out
+          ${mounted ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'}
         `}
       >
-        <div 
-          className={`
-            bg-[#111827]/80 backdrop-blur-xl border border-white/10 
-            rounded-2xl p-10 shadow-2xl shadow-black/50
-            
-          `}
-        >
-          {/* Brand */}
-          <div className="flex items-center gap-2 mb-2">
-            <div className="w-2 h-2 rounded-full bg-[#06b6d4] animate-pulse" />
-            <span className="font-mono text-[11px] tracking-[4px] text-[#06b6d4] uppercase font-semibold">
-              DriverLog
+        {/* Luz trasera más amplia y brillante */}
+        <div className="absolute -inset-2 bg-gradient-to-tr from-cyan-500/20 via-blue-600/20 to-transparent rounded-2xl blur-3xl opacity-100 pointer-events-none" />
+
+        {/* Contenedor principal con un borde superior ligeramente más iluminado (efecto bisel) */}
+        <div className="relative bg-[#12161f] border border-slate-700/60 rounded-xl p-8 md:p-10 shadow-2xl shadow-black">
+          {/* Tag de Marca / Metadata */}
+          <div className="flex items-center justify-between mb-6">
+            <div className="flex items-center gap-2">
+              <div className="w-1.5 h-1.5 rounded-full bg-cyan-400" />
+              <span className="font-mono text-[11px] tracking-[3px] text-cyan-400 uppercase font-medium">
+                DriverLog RutaUY
+              </span>
+            </div>
+            <span className="font-mono text-[10px] text-slate-500 px-2 py-0.5 rounded border border-slate-800 bg-slate-900/50">
+              v2.0
             </span>
           </div>
 
-          {/* Título */}
-          <h1 className="text-[26px] font-bold mb-1 text-white tracking-tight">
-            Panel de{' '}
-            <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#3b82f6] to-[#06b6d4]">
-              Administración
-            </span>
+          {/* Título Principal con jerarquía editorial */}
+          <h1 className="text-2xl font-semibold tracking-tight text-white mb-2">
+            Panel de <span className="font-normal text-slate-400 italic">Administración</span>
           </h1>
-          <p className="text-[#64748b] text-sm mb-8">
-            Ingresa tus credenciales para continuar
+          <p className="text-slate-400 text-sm mb-8 font-normal">
+            Autenticación segura para control de flota y logística.
           </p>
 
           {/* Formulario */}
-          <form onSubmit={handleLogin} className="space-y-5">
+          <form onSubmit={handleLogin} className="space-y-4">
             
-            {/* Email */}
-            <div className="group">
-              <label className="block text-[11px] font-semibold text-[#94a3b8] uppercase tracking-[2px] mb-2">
-                Email
+            {/* Campo Email */}
+            <div>
+              <label className="block text-[11px] font-mono text-slate-400 uppercase tracking-[1.5px] mb-2">
+                Correo Electrónico
               </label>
               <input
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="tu@email.com"
+                placeholder="operaciones@empresa.com"
                 className={`
-  w-full bg-[#0f172a]/60 border border-[#1e293b] rounded-xl 
-  px-4 py-3.5 text-white placeholder-[#334155] 
-  outline-none transition-all duration-300
-  focus:border-[#3b82f6]/50 focus:ring-2 focus:ring-[#3b82f6]/10 
-  focus:bg-[#0f172a]/80
-  ${loginError ? 'login-error' : ''}
-  ${loginSuccess ? 'login-success' : ''}
-`}
-                
+                  w-full bg-[#090b10] border border-slate-800 rounded-lg 
+                  px-3.5 py-3 text-sm text-slate-100 placeholder-slate-600 
+                  outline-none transition-all duration-200
+                  focus:border-cyan-500/50 focus:ring-1 focus:ring-cyan-500/20
+                  ${loginError ? 'login-error' : ''}
+                  ${loginSuccess ? 'login-success' : ''}
+                `}
                 required
               />
             </div>
 
-            {/* Password */}
-            <div className="group">
-              <label className="block text-[11px] font-semibold text-[#94a3b8] uppercase tracking-[2px] mb-2">
-                Contraseña
+            {/* Campo Contraseña */}
+            <div>
+              <label className="block text-[11px] font-mono text-slate-400 uppercase tracking-[1.5px] mb-2">
+                Contraseña de Acceso
               </label>
               <div className="relative">
                 <input
@@ -175,76 +169,66 @@ setTimeout(() => {
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="••••••••"
                   className={`
-  w-full bg-[#0f172a]/60 border border-[#1e293b] rounded-xl 
-  px-4 py-3.5 pr-11 text-white placeholder-[#334155] 
-  outline-none transition-all duration-300
-  focus:border-[#3b82f6]/50 focus:ring-2 focus:ring-[#3b82f6]/10 
-  focus:bg-[#0f172a]/80
-  ${loginError ? 'login-error' : ''}
-  ${loginSuccess ? 'login-success' : ''}
-`}
+                    w-full bg-[#090b10] border border-slate-800 rounded-lg 
+                    px-3.5 py-3 pr-10 text-sm text-slate-100 placeholder-slate-600 
+                    outline-none transition-all duration-200
+                    focus:border-cyan-500/50 focus:ring-1 focus:ring-cyan-500/20
+                    ${loginError ? 'login-error' : ''}
+                    ${loginSuccess ? 'login-success' : ''}
+                  `}
                   required
                 />
                 <button
                   type="button"
                   onClick={() => setShowPass(!showPass)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-[#475569] hover:text-[#94a3b8] transition-colors"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 transition-colors"
                 >
-                  {showPass ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                  {showPass ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
               </div>
             </div>
 
-            {/* Botón */}
+            {/* Botón de Ingreso con diseño sobrio y táctil */}
             <button
               type="submit"
               disabled={loading}
               className="
-                w-full relative overflow-hidden 
-                bg-gradient-to-r from-[#3b82f6] to-[#2563eb] 
-                text-white rounded-xl py-3.5 font-semibold text-sm tracking-wide
-                hover:shadow-lg hover:shadow-[#3b82f6]/25 hover:scale-[1.02] 
-                active:scale-[0.98] 
-                disabled:opacity-70 disabled:hover:scale-100 disabled:cursor-not-allowed 
-                transition-all duration-300 group
+                w-full relative overflow-hidden mt-2
+                bg-slate-100 hover:bg-white text-slate-950
+                rounded-lg py-3 font-medium text-sm tracking-wide
+                active:scale-[0.99] disabled:opacity-50 disabled:pointer-events-none
+                transition-all duration-200 group flex items-center justify-center gap-2
               "
             >
-              <span className={`
-                flex items-center justify-center gap-2 
-                transition-all duration-300
-                ${loading ? 'opacity-0' : 'opacity-100'}
-              `}>
-                Ingresar
-                <ArrowRight className="w-4 h-4 transition-transform duration-300 group-hover:translate-x-1" />
+              <span className={`flex items-center gap-2 transition-opacity duration-200 ${loading ? 'opacity-0' : 'opacity-100'}`}>
+                Acceder al Sistema
+                <ArrowRight className="w-4 h-4 transition-transform duration-200 group-hover:translate-x-0.5" />
               </span>
 
               {loading && (
                 <span className="absolute inset-0 flex items-center justify-center">
-                  <Loader2 className="animate-spin h-5 w-5 text-white" />
+                  <Loader2 className="animate-spin h-4 w-4 text-slate-950" />
                 </span>
               )}
             </button>
 
-            {/* Error */}
+            {/* Mensaje de Error */}
             {error && (
-              <div className="
-                flex items-center gap-2 text-[#f87171] text-sm 
-                bg-[#ef4444]/10 border border-[#ef4444]/20 
-                rounded-lg px-3 py-2.5 animate-fade-in
-              ">
+              <div className="flex items-center gap-2 text-rose-400 text-xs bg-rose-950/30 border border-rose-900/40 rounded-lg px-3 py-2.5 animate-fade-in">
                 <AlertCircle className="w-4 h-4 flex-shrink-0" />
-                {error}
+                <span>{error}</span>
               </div>
             )}
           </form>
 
-          {/* Footer */}
-          <div className="mt-8 pt-6 border-t border-[#1e293b] text-center">
-            <p className="text-[11px] text-[#475569] tracking-wide">DriverLog Admin v2.0</p>
+          {/* Footer discreto */}
+          <div className="mt-8 pt-5 border-t border-slate-800/60 flex items-center justify-between text-[11px] text-slate-500 font-mono">
+            <span>SECURE GATEWAY</span>
+            <span>RESTRICTED ACCESS</span>
           </div>
+
         </div>
       </div>
-
     </div>
   )
 }

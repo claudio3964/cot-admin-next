@@ -68,46 +68,60 @@ export default function DashboardPage() {
     fetchData()
   }, [router])
 
-  const kpiCards = [
+ const kpiCards = [
     {
-      title: 'CHOFERES REGISTRADOS',
+      title: 'Choferes Registrados',
       value: stats.choferes,
       icon: Users,
-      gradient: 'from-[#3b82f6] to-[#2563eb]',
-      shadow: 'shadow-[#3b82f6]/20'
+      accent: 'text-blue-400',
+      barColor: 'bg-blue-500',
+      borderHover: 'hover:border-blue-500/40'
     },
     {
-      title: 'JORNADAS HOY',
+      title: 'Jornadas Hoy',
       value: stats.jornadasHoy,
       icon: CalendarDays,
-      gradient: 'from-[#10b981] to-[#059669]',
-      shadow: 'shadow-[#10b981]/20'
+      accent: 'text-emerald-400',
+      barColor: 'bg-emerald-500',
+      borderHover: 'hover:border-emerald-500/40'
     },
     {
-      title: 'ALERTAS PENDIENTES',
+      title: 'Alertas Pendientes',
       value: stats.alertasPendientes,
       icon: Bell,
-      gradient: 'from-[#f59e0b] to-[#d97706]',
-      shadow: 'shadow-[#f59e0b]/20'
+      accent: 'text-amber-400',
+      barColor: 'bg-amber-500',
+      borderHover: 'hover:border-amber-500/40'
     },
     {
-      title: 'JORNADAS TOTALES',
+      title: 'Jornadas Totales',
       value: stats.jornadasTotal,
       icon: ClipboardList,
-      gradient: 'from-[#8b5cf6] to-[#7c3aed]',
-      shadow: 'shadow-[#8b5cf6]/20'
+      accent: 'text-violet-400',
+      barColor: 'bg-violet-500',
+      borderHover: 'hover:border-violet-500/40'
     }
   ]
 
   return (
-    <div>
-      {/* Header */}
-      <div className="mb-8">
-        <h2 className="text-xl font-bold text-white mb-1">Resumen General</h2>
-        <p className="text-sm text-[#64748b]">Vista rápida del estado actual de la flota</p>
+    <div className="p-6 md:p-8 max-w-7xl mx-auto">
+      {/* Header con tono editorial */}
+      <div className="mb-8 flex flex-col md:flex-row md:items-center md:justify-between gap-4 border-b border-slate-800/80 pb-6">
+        <div>
+          <h1 className="text-2xl font-semibold text-white tracking-tight mb-1">
+            Resumen <span className="font-normal text-slate-400 italic">General</span>
+          </h1>
+          <p className="text-sm text-slate-400">
+            Monitoreo en tiempo real del estado actual de la flota y operaciones.
+          </p>
+        </div>
+        <div className="flex items-center gap-2 font-mono text-xs text-slate-400 bg-slate-900/60 border border-slate-800 px-3 py-1.5 rounded-lg w-fit">
+          <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+          <span>ESTADO: OPERATIVO</span>
+        </div>
       </div>
 
-      {/* KPI Cards */}
+   {/* KPI Cards con mayor contraste y foco visual */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
         {kpiCards.map((card, i) => {
           const Icon = card.icon
@@ -115,28 +129,34 @@ export default function DashboardPage() {
             <div
               key={card.title}
               className={`
-                group relative bg-[#111827]/60 backdrop-blur-sm border border-white/[0.06] 
-                rounded-xl p-5 hover:border-white/10 transition-all duration-500 
-                hover:-translate-y-1 hover:shadow-xl ${card.shadow}
-                ${mounted ? 'opacity-100 translate-none' : 'opacity-0 translate-y-6'}
+                group relative bg-[#12161f] border border-slate-800 
+                rounded-xl p-5 transition-all duration-300 shadow-lg
+                ${card.borderHover}
+                ${mounted ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'}
               `}
-              style={{ transitionDelay: `${i * 100 + 100}ms` }}
+              style={{ transitionDelay: `${i * 75}ms` }}
             >
-              <div className="flex items-start justify-between mb-3">
-                <div className={`p-2 rounded-lg bg-gradient-to-br ${card.gradient} bg-opacity-10`}>
-                  <Icon className="w-4 h-4 text-white" />
-                </div>
-                <span className="text-[10px] font-mono text-[#475569] uppercase tracking-wider">
+              <div className="flex items-start justify-between mb-4">
+                {/* Título más claro y legible */}
+                <span className="text-[11px] font-mono text-slate-300 uppercase tracking-wider font-semibold">
                   {card.title}
                 </span>
+                {/* Icono con acento de color distintivo */}
+                <div className={`p-2 rounded-lg bg-slate-900/90 border border-slate-700/60 ${card.accent}`}>
+                  <Icon className="w-4 h-4" />
+                </div>
               </div>
-              <div className={`text-3xl font-bold bg-gradient-to-r ${card.gradient} bg-clip-text text-transparent`}>
+              
+              {/* Valor numérico brillante y destacado */}
+              <div className="text-3xl font-bold tracking-tight text-white mb-4 font-mono">
                 {card.value}
               </div>
-              <div className="mt-3 h-1 w-full bg-[#1e293b] rounded-full overflow-hidden">
+
+              {/* Barra de progreso con color temático */}
+              <div className="h-1 w-full bg-slate-800 rounded-full overflow-hidden">
                 <div
-                  className={`h-full rounded-full bg-gradient-to-r ${card.gradient} transition-all duration-1000 ease-out`}
-                  style={{ width: mounted ? `${Math.min(card.value * 2 + 20, 100)}%` : '0%' }}
+                  className={`h-full rounded-full ${card.barColor} transition-all duration-1000 ease-out`}
+                  style={{ width: mounted ? `${Math.min((card.value || 1) * 2 + 15, 100)}%` : '0%' }}
                 />
               </div>
             </div>
@@ -144,19 +164,19 @@ export default function DashboardPage() {
         })}
       </div>
 
-      {/* Placeholder para gráficos futuros */}
+      {/* Sección de Estadísticas / Próximamente con diseño estructurado */}
       <div className={`
-        bg-[#111827]/40 backdrop-blur-sm border border-white/[0.06] rounded-xl p-8
-        transition-all duration-700 delay-500
-        ${mounted ? 'opacity-100 translate-none' : 'opacity-0 translate-y-6'}
+        bg-[#12161f] border border-slate-800/80 rounded-xl p-8 md:p-12
+        transition-all duration-500 delay-300
+        ${mounted ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'}
       `}>
-        <div className="flex flex-col items-center justify-center py-12 text-center">
-          <div className="w-16 h-16 rounded-2xl bg-[#1e293b] flex items-center justify-center mb-4">
-            <BarChart3 className="w-8 h-8 text-[#3b82f6]" />
+        <div className="flex flex-col items-center justify-center text-center max-w-md mx-auto py-6">
+          <div className="w-12 h-12 rounded-xl bg-slate-900 border border-slate-800 flex items-center justify-center mb-4 text-cyan-400">
+            <BarChart3 className="w-6 h-6" />
           </div>
-          <h3 className="text-lg font-semibold text-white mb-2">Estadísticas detalladas</h3>
-          <p className="text-sm text-[#64748b] max-w-md">
-            Próximamente: gráficos de jornadas por chofer, alertas históricas y métricas de flota.
+          <h3 className="text-base font-medium text-white mb-1">Métricas y Gráficos Avanzados</h3>
+          <p className="text-sm text-slate-400 leading-relaxed">
+            Próximamente disponible: análisis histórico de rendimiento por chofer, trazabilidad de rutas y reportes de flota.
           </p>
         </div>
       </div>
